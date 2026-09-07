@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Inkwell — Watermark a PDF privately in your browser</title>
+<meta name="description" content="Add a text or logo watermark to a PDF without uploading it anywhere. Drag it into place, rotate, tile it across the page, and even attach a link — all rendered live and processed entirely inside your browser tab." />
+<meta name="theme-color" content="#14161A" />
+<link rel="canonical" href="https://example.com/" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Inkwell — Watermark a PDF privately in your browser" />
+<meta property="og:description" content="Add a text watermark to a PDF entirely on your own device. No upload, live preview, and full Arabic/RTL support." />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Inkwell",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Any (runs in a web browser)",
+  "description": "Add a text watermark to a PDF entirely in your browser, with live preview and no file upload.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Naskh+Arabic:wght@400;600&family=Cairo:wght@400;600&family=Noto+Sans+Hebrew:wght@400;600&family=Rubik:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Hind:wght@400;600&family=Noto+Sans+SC:wght@400;600&family=Noto+Sans:wght@400;600&family=PT+Sans:wght@400;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<a class="skip-link" href="#workspace" data-i18n="openFile">Skip to workspace</a>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+      <path d="M15 3C10 10 6 14.5 6 19a9 9 0 0 0 18 0c0-4.5-4-9-9-16Z" fill="var(--brand-ink)"/>
+      <path d="M15 8.5c-2.8 4.3-5 7.3-5 10.2a5 5 0 0 0 10 0c0-2.9-2.2-5.9-5-10.2Z" fill="var(--brand-ink-deep)" opacity="0.55"/>
+    </svg>
+    <div class="brand-text">
+      <span class="brand-name" data-i18n="brandName">Inkwell</span>
+      <span class="brand-tag" data-i18n="brandTag">PDF marking studio</span>
+    </div>
+  </div>
+  <div class="topbar-file" id="fileNameDisplay" hidden></div>
+  <div class="topbar-actions">
+    <button type="button" class="btn btn-ghost btn-lang" id="langToggleBtn" data-i18n="langToggle">العربية</button>
+    <button type="button" class="btn btn-ghost" id="newFileBtn" data-i18n="newFile" hidden>Open another file</button>
+    <button type="button" class="btn btn-primary" id="downloadBtn" data-i18n="download" disabled>Download marked PDF</button>
+  </div>
+</header>
+
+<main>
+
+  <section class="tool-hero">
+    <h1 data-i18n="heroTitle">Mark up a PDF without sending it anywhere.</h1>
+    <p data-i18n="heroBody">Inkwell stamps text and logo watermarks onto your document entirely inside this browser tab — drag, rotate, tile, and link them, then download.</p>
+  </section>
+
+  <div class="ad-slot ad-slot--leaderboard" aria-label="Advertisement space">
+    <span class="ad-slot-label">Advertisement</span>
+  </div>
+
+  <section id="workspace" class="workspace" aria-label="PDF watermark workspace">
+
+    <div id="dropzone" class="dropzone">
+      <input type="file" id="fileInput" accept="application/pdf" hidden />
+      <div class="dropzone-icon" aria-hidden="true">
+        <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+          <rect x="9" y="4" width="26" height="34" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M15 15h14M15 22h14M15 29h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <p class="dropzone-hint" data-i18n="dropHint">Drop a PDF here, or choose a file to begin</p>
+      <button type="button" class="btn btn-primary" id="chooseFileBtn" data-i18n="openFile">Open a PDF</button>
+      <p class="privacy-note" data-i18n="privacyNote">Your file stays on this device. Nothing is uploaded.</p>
+    </div>
+
+    <div id="editor" class="editor" hidden>
+
+      <aside class="tool-rail" aria-label="Watermark layer">
+        <button type="button" class="rail-btn is-active" id="textModeBtn" aria-pressed="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span data-i18n="textLabel">Text</span>
+        </button>
+        <button type="button" class="rail-btn" id="logoModeBtn" aria-pressed="false">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/><path d="M4 14l4-4 3 3 3-4 3 5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          <span data-i18n="logoLabel">Logo</span>
+        </button>
+      </aside>
+
+      <div class="canvas-area">
+        <p class="stamp-hint" id="stampHint" data-i18n="stampHint">Drag a mark to reposition it, or use the panel to fine-tune</p>
+        <div class="canvas-scroll" id="canvasScroll">
+          <div class="page-sheet" id="pageSheet">
+            <canvas id="pdfCanvas"></canvas>
+
+            <div class="mark-overlay" id="textOverlay" data-layer="text">
+              <div class="mark-body" id="textOverlayBody">
+                <span id="textOverlayText">CONFIDENTIAL</span>
+              </div>
+              <button type="button" class="mark-handle mark-handle--rotate" id="textRotateHandle" aria-label="Rotate text watermark">↻</button>
+              <button type="button" class="mark-handle mark-handle--resize" id="textResizeHandle" aria-label="Resize text watermark">⤡</button>
+            </div>
+
+            <div class="mark-overlay" id="imageOverlay" data-layer="image" hidden>
+              <div class="mark-body" id="imageOverlayBody">
+                <img id="imageOverlayImg" alt="Logo watermark preview" />
+              </div>
+              <button type="button" class="mark-handle mark-handle--rotate" id="imageRotateHandle" aria-label="Rotate logo watermark">↻</button>
+              <button type="button" class="mark-handle mark-handle--resize" id="imageResizeHandle" aria-label="Resize logo watermark">⤡</button>
+            </div>
+
+            <div class="repeat-preview" id="textRepeatPreview" hidden></div>
+            <div class="repeat-preview" id="imageRepeatPreview" hidden></div>
+          </div>
+        </div>
+        <div class="page-nav">
+          <button type="button" id="prevPageBtn" aria-label="Previous page" data-i18n-aria="prevPage">‹</button>
+          <span id="pageIndicator">1 / 1</span>
+          <button type="button" id="nextPageBtn" aria-label="Next page" data-i18n-aria="nextPage">›</button>
+        </div>
+      </div>
+
+      <div class="stamp-tray" id="stampTray">
+        <div class="stamp-tray-header">
+          <div class="tray-tabs" role="tablist" aria-label="Watermark layer settings">
+            <button type="button" class="tray-tab is-active" id="textTabBtn" role="tab" aria-selected="true" data-i18n="textLabel">Text</button>
+            <button type="button" class="tray-tab" id="logoTabBtn" role="tab" aria-selected="false" data-i18n="logoLabel">Logo</button>
+          </div>
+          <button type="button" class="tray-close" id="trayCloseBtn" aria-label="Close">✕</button>
+        </div>
+
+        <div class="tray-panel" id="textPanel">
+          <div class="tray-field">
+            <div class="tray-field-row">
+              <label for="textEnabled" class="tray-check"><input type="checkbox" id="textEnabled" checked /> <span data-i18n="enableText">Show text watermark</span></label>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label for="watermarkText" data-i18n="textLabel">Text</label>
+            <input type="text" id="watermarkText" maxlength="80" data-i18n-placeholder="textPlaceholder" placeholder="e.g. CONFIDENTIAL" />
+          </div>
+
+          <div class="tray-field">
+            <span class="tray-field-label" data-i18n="scriptLabel">Script &amp; font</span>
+            <div class="script-row" id="scriptRow"></div>
+            <select id="fontFamilySelect" class="tray-select"></select>
+          </div>
+
+          <div class="tray-field">
+            <div class="style-row">
+              <button type="button" class="style-btn" id="boldBtn" aria-pressed="false"><b>B</b></button>
+              <button type="button" class="style-btn" id="italicBtn" aria-pressed="false"><i>I</i></button>
+              <button type="button" class="style-btn" id="underlineBtn" aria-pressed="false"><u>U</u></button>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <span class="tray-field-label" data-i18n="colorLabel">Ink color</span>
+            <div class="color-row" id="colorRow" role="group" aria-label="Ink color">
+              <button type="button" class="color-swatch is-active" data-color="#1B1D1F" style="--swatch:#1B1D1F" aria-label="Black"></button>
+              <button type="button" class="color-swatch" data-color="#C0392E" style="--swatch:#C0392E" aria-label="Red"></button>
+              <button type="button" class="color-swatch" data-color="#1F4E8C" style="--swatch:#1F4E8C" aria-label="Blue"></button>
+              <button type="button" class="color-swatch" data-color="#0F7B6C" style="--swatch:#0F7B6C" aria-label="Teal"></button>
+              <label class="color-swatch color-swatch--custom" data-i18n-aria="customColor" aria-label="Custom color">
+                <input type="color" id="customColorInput" value="#1B1D1F" />
+              </label>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="fontSizeRange" data-i18n="sizeLabel">Size</label><output id="fontSizeReadout">36pt</output></div>
+            <input type="range" id="fontSizeRange" min="8" max="160" value="36" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="opacityRange" data-i18n="opacityLabel">Opacity</label><output id="opacityReadout">35%</output></div>
+            <input type="range" id="opacityRange" min="5" max="100" value="35" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="rotationRange" data-i18n="rotationLabel">Angle</label><output id="rotationReadout">45°</output></div>
+            <input type="range" id="rotationRange" min="-180" max="180" value="45" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <span class="tray-field-label" data-i18n="quickPositionLabel">Quick position</span>
+            <div class="quick-pos-row" id="textQuickPos">
+              <button type="button" data-pos="top-left" aria-label="Top left"></button>
+              <button type="button" data-pos="top-center" aria-label="Top center"></button>
+              <button type="button" data-pos="center" aria-label="Center" class="is-active"></button>
+              <button type="button" data-pos="bottom-center" aria-label="Bottom center"></button>
+              <button type="button" data-pos="bottom-right" aria-label="Bottom right"></button>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label for="textLayerOrder" data-i18n="layerOrderLabel">Layer order</label>
+            <select id="textLayerOrder" class="tray-select">
+              <option value="over" selected data-i18n="overContent">Over page content</option>
+              <option value="under" data-i18n="underContent">Behind page content</option>
+            </select>
+          </div>
+
+          <div class="tray-field">
+            <label for="textPageMode" data-i18n="pagesLabel">Pages</label>
+            <select id="textPageMode" class="tray-select">
+              <option value="all" selected data-i18n="allPages">All pages</option>
+              <option value="custom" data-i18n="customPages">Custom range</option>
+            </select>
+            <input type="text" id="textPageRange" class="tray-select" placeholder="1-3,5,7" hidden />
+          </div>
+
+          <div class="tray-field">
+            <label class="tray-check"><input type="checkbox" id="textRepeat" /> <span data-i18n="repeatLabel">Repeat across the page</span></label>
+            <div class="repeat-controls" id="textRepeatControls" hidden>
+              <select id="textRepeatPattern" class="tray-select">
+                <option value="grid" data-i18n="patternGrid">Grid</option>
+                <option value="dense" data-i18n="patternDense">Dense</option>
+                <option value="wide" data-i18n="patternWide">Wide</option>
+                <option value="diagonal" data-i18n="patternDiagonal">Diagonal</option>
+              </select>
+              <div class="tray-field-row"><span data-i18n="gapLabel">Gap</span><output id="textGapReadout">80pt</output></div>
+              <input type="range" id="textGapRange" min="10" max="300" value="80" step="5" />
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label class="tray-check"><input type="checkbox" id="textLinkEnabled" /> <span data-i18n="linkLabel">Make it a link</span></label>
+            <input type="url" id="textLinkUrl" class="tray-select" placeholder="https://example.com" hidden />
+          </div>
+        </div>
+
+        <div class="tray-panel" id="logoPanel" hidden>
+          <div class="tray-field">
+            <div id="logoUploadRow">
+              <label class="btn btn-ghost logo-upload-btn" for="logoInput" data-i18n="uploadLogo">Upload a logo (PNG/JPG)</label>
+              <input type="file" id="logoInput" accept="image/png,image/jpeg" hidden />
+            </div>
+            <div id="logoLoadedRow" class="logo-loaded-row" hidden>
+              <img id="logoThumb" alt="Logo thumbnail" />
+              <span id="logoFileNameLabel"></span>
+              <button type="button" class="btn btn-ghost" id="logoRemoveBtn" data-i18n="removeLogo">Remove</button>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="imageWidthRange" data-i18n="widthLabel">Width</label><output id="imageWidthReadout">160pt</output></div>
+            <input type="range" id="imageWidthRange" min="20" max="500" value="160" step="5" />
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="imageOpacityRange" data-i18n="opacityLabel">Opacity</label><output id="imageOpacityReadout">80%</output></div>
+            <input type="range" id="imageOpacityRange" min="5" max="100" value="80" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="imageRotationRange" data-i18n="rotationLabel">Angle</label><output id="imageRotationReadout">0°</output></div>
+            <input type="range" id="imageRotationRange" min="-180" max="180" value="0" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <span class="tray-field-label" data-i18n="quickPositionLabel">Quick position</span>
+            <div class="quick-pos-row" id="imageQuickPos">
+              <button type="button" data-pos="top-left" aria-label="Top left"></button>
+              <button type="button" data-pos="top-center" aria-label="Top center"></button>
+              <button type="button" data-pos="center" aria-label="Center" class="is-active"></button>
+              <button type="button" data-pos="bottom-center" aria-label="Bottom center"></button>
+              <button type="button" data-pos="bottom-right" aria-label="Bottom right"></button>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label for="imageLayerOrder" data-i18n="layerOrderLabel">Layer order</label>
+            <select id="imageLayerOrder" class="tray-select">
+              <option value="over" selected data-i18n="overContent">Over page content</option>
+              <option value="under" data-i18n="underContent">Behind page content</option>
+            </select>
+          </div>
+
+          <div class="tray-field">
+            <label for="imagePageMode" data-i18n="pagesLabel">Pages</label>
+            <select id="imagePageMode" class="tray-select">
+              <option value="all" selected data-i18n="allPages">All pages</option>
+              <option value="custom" data-i18n="customPages">Custom range</option>
+            </select>
+            <input type="text" id="imagePageRange" class="tray-select" placeholder="1-3,5,7" hidden />
+          </div>
+
+          <div class="tray-field">
+            <label class="tray-check"><input type="checkbox" id="imageRepeat" /> <span data-i18n="repeatLabel">Repeat across the page</span></label>
+            <div class="repeat-controls" id="imageRepeatControls" hidden>
+              <select id="imageRepeatPattern" class="tray-select">
+                <option value="grid" data-i18n="patternGrid">Grid</option>
+                <option value="dense" data-i18n="patternDense">Dense</option>
+                <option value="wide" data-i18n="patternWide">Wide</option>
+                <option value="diagonal" data-i18n="patternDiagonal">Diagonal</option>
+              </select>
+              <div class="tray-field-row"><span data-i18n="gapLabel">Gap</span><output id="imageGapReadout">80pt</output></div>
+              <input type="range" id="imageGapRange" min="10" max="300" value="80" step="5" />
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label class="tray-check"><input type="checkbox" id="imageLinkEnabled" /> <span data-i18n="linkLabel">Make it a link</span></label>
+            <input type="url" id="imageLinkUrl" class="tray-select" placeholder="https://example.com" hidden />
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="progressOverlay" class="progress-overlay" hidden>
+      <div class="progress-box">
+        <div class="progress-spinner" aria-hidden="true"></div>
+        <p id="progressLabel">Working…</p>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden role="alert" aria-live="assertive">
+      <p class="toast-title" id="toastTitle"></p>
+      <p class="toast-message" id="toastMessage"></p>
+      <div class="toast-actions">
+        <button type="button" id="toastContinueBtn" class="btn btn-ghost" hidden></button>
+        <button type="button" id="toastDismissBtn" class="btn btn-primary"></button>
+      </div>
+    </div>
+
+  </section>
+
+  <section class="landing-section" id="how">
+    <h2 data-i18n="sectionHowTitle">How it works</h2>
+    <p data-i18n="sectionHowBody">Open a file, click the watermark on the page to reveal its controls, dial in the text, size, color, angle, and placement, then download the result.</p>
+  </section>
+
+  <div class="ad-slot ad-slot--in-content" aria-label="Advertisement space">
+    <span class="ad-slot-label">Advertisement</span>
+  </div>
+
+  <section class="landing-section" id="privacy">
+    <h2 data-i18n="sectionPrivacyTitle">Why nothing gets uploaded</h2>
+    <p data-i18n="sectionPrivacyBody">Inkwell reads your PDF using your browser's own PDF engine and writes the watermark back into the file locally.</p>
+  </section>
+
+  <section class="landing-section" id="roadmap">
+    <h2 data-i18n="sectionRoadmapTitle">What comes next</h2>
+    <p data-i18n="sectionRoadmapBody">The watermark engine here is built as a small, reusable piece.</p>
+    <ul class="roadmap-grid" id="roadmapGrid"></ul>
+  </section>
+
+  <section class="landing-section" id="faq">
+    <h2 data-i18n="faqTitle">Questions</h2>
+    <div id="faqList"></div>
+  </section>
+
+  <div class="ad-slot ad-slot--pre-footer" aria-label="Advertisement space">
+    <span class="ad-slot-label">Advertisement</span>
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <p data-i18n="footerRights">Built to keep your documents on your device.</p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
