@@ -1,0 +1,2665 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Inkwell — Watermark a PDF privately in your browser</title>
+<meta name="description" content="Add a text or logo watermark to a PDF without uploading it anywhere. Drag it into place, rotate, tile it across the page, and even attach a link — all rendered live and processed entirely inside your browser tab." />
+<meta name="theme-color" content="#14161A" />
+<link rel="canonical" href="https://example.com/" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Inkwell — Watermark a PDF privately in your browser" />
+<meta property="og:description" content="Add a text watermark to a PDF entirely on your own device. No upload, live preview, and full Arabic/RTL support." />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Inkwell",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Any (runs in a web browser)",
+  "description": "Add a text watermark to a PDF entirely in your browser, with live preview and no file upload.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Naskh+Arabic:wght@400;600&family=Cairo:wght@400;600&family=Noto+Sans+Hebrew:wght@400;600&family=Rubik:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Hind:wght@400;600&family=Noto+Sans+SC:wght@400;600&family=Noto+Sans:wght@400;600&family=PT+Sans:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   Inkwell — design tokens
+   Palette: a dark "light table" workspace with a floating white
+   page and a single teal ink accent (not the common cream+terracotta
+   or near-black+neon combinations).
+   ============================================================ */
+
+:root {
+  --ink-black: #14161a;
+  --ink-charcoal: #1e2024;
+  --ink-charcoal-2: #262a2f;
+  --paper: #ffffff;
+  --paper-dim: #eff1f0;
+  --paper-line: #dde0de;
+  --graphite: #6b6f76;
+  --graphite-light: #a7abb3;
+  --brand-ink: #12a08c;
+  --brand-ink-deep: #0b5f54;
+  --seal-gold: #c99a2e;
+  --danger: #c0392e;
+  --danger-bg: #3a2320;
+
+  --font-display: 'Fraunces', 'Georgia', serif;
+  --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
+  --font-arabic: 'Noto Naskh Arabic', 'Noto Sans Arabic', var(--font-ui);
+
+  --radius-control: 6px;
+  --shadow-sheet: 0 24px 48px -20px rgba(4, 6, 8, 0.55), 0 2px 0 rgba(4, 6, 8, 0.08);
+  --shadow-tray: 0 20px 44px -18px rgba(4, 6, 8, 0.5);
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+/* The `hidden` attribute must always win over any component's own display
+   rule. Without this, a class like `.editor { display: grid }` ties in CSS
+   specificity with the browser's own `[hidden] { display: none }` rule and
+   — since it loads later — silently overrides it, leaving elements visible
+   even while JavaScript has set them hidden. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ink-black);
+  color: #e9eaec;
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+body.lang-ar {
+  font-family: var(--font-arabic);
+}
+
+h1, h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #f5f5f3;
+}
+
+a { color: var(--brand-ink); }
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--brand-ink);
+  color: #fff;
+  padding: 10px 16px;
+  z-index: 100;
+}
+.skip-link:focus { left: 12px; top: 12px; }
+
+:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+/* ---------------- Buttons ---------------- */
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  padding: 9px 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.btn:active { transform: translateY(1px); }
+
+.btn-primary {
+  background: var(--brand-ink);
+  color: #06211d;
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) { background: #17b39d; }
+
+.btn-ghost {
+  background: transparent;
+  border-color: #3a3e44;
+  color: #cfd2d6;
+}
+.btn-ghost:hover:not(:disabled) { border-color: var(--graphite-light); }
+
+/* ---------------- Top bar ---------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #24272c;
+  position: sticky;
+  top: 0;
+  background: rgba(20, 22, 26, 0.92);
+  backdrop-filter: blur(6px);
+  z-index: 20;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { flex-shrink: 0; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+.brand-name { font-family: var(--font-display); font-size: 1.05rem; color: #f5f5f3; }
+.brand-tag { font-size: 0.72rem; color: var(--graphite-light); }
+
+.topbar-file {
+  color: var(--graphite-light);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: center;
+}
+
+.topbar-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+
+/* ---------------- Hero ---------------- */
+
+.tool-hero {
+  max-width: 760px;
+  margin: 56px auto 28px;
+  padding: 0 20px;
+  text-align: center;
+}
+.tool-hero h1 {
+  font-size: clamp(1.7rem, 3.4vw, 2.6rem);
+  line-height: 1.15;
+  margin: 0 0 14px;
+}
+.tool-hero p {
+  color: var(--graphite-light);
+  font-size: 1.02rem;
+  line-height: 1.6;
+  max-width: 58ch;
+  margin: 0 auto;
+}
+
+/* ---------------- Ad slots ---------------- */
+
+.ad-slot {
+  max-width: 980px;
+  margin: 36px auto;
+  min-height: 90px;
+  border: 1px dashed #33373d;
+  border-radius: var(--radius-control);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #52565d;
+}
+.ad-slot-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #52565d;
+}
+
+/* ---------------- Workspace ---------------- */
+
+.workspace {
+  position: relative;
+  max-width: 1180px;
+  margin: 0 auto 60px;
+  padding: 0 20px;
+}
+
+.dropzone {
+  border: 1.5px dashed #3a3e44;
+  border-radius: 10px;
+  padding: 64px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  background: linear-gradient(180deg, #191b1f, #16181c);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.dropzone.is-dragover {
+  border-color: var(--brand-ink);
+  background: #17211f;
+}
+.dropzone-icon { color: var(--graphite-light); }
+.dropzone-hint { color: var(--graphite-light); margin: 0; max-width: 40ch; }
+.privacy-note {
+  color: var(--graphite);
+  font-size: 0.8rem;
+  margin: 4px 0 0;
+}
+
+/* ---------------- Editor layout ---------------- */
+
+.editor {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 0;
+  border: 1px solid #24272c;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ink-charcoal);
+  min-height: 560px;
+  position: relative;
+}
+
+.tool-rail {
+  background: var(--ink-charcoal-2);
+  border-inline-end: 1px solid #2b2f34;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 0;
+  gap: 10px;
+}
+.rail-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--graphite-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.rail-btn span {
+  position: absolute;
+  inset-inline-start: 48px;
+  white-space: nowrap;
+  background: var(--ink-black);
+  border: 1px solid #33373d;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.rail-btn:hover span, .rail-btn:focus-visible span { opacity: 1; }
+.rail-btn.is-active { background: rgba(18, 160, 140, 0.16); color: var(--brand-ink); border-color: rgba(18, 160, 140, 0.4); }
+
+.canvas-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 22px 16px;
+  min-width: 0;
+}
+
+.stamp-hint {
+  color: var(--graphite-light);
+  font-size: 0.82rem;
+  margin: 0 0 14px;
+}
+
+.canvas-scroll {
+  width: 100%;
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 4px;
+}
+
+.page-sheet {
+  position: relative;
+  background: var(--paper);
+  box-shadow: var(--shadow-sheet);
+  height: fit-content;
+  flex-shrink: 0;
+}
+.page-sheet canvas { display: block; }
+
+.mark-overlay {
+  position: absolute;
+  left: 50%;
+  top: 15%;
+  transform: translate(-50%, -50%) rotate(0deg);
+  transform-origin: center center;
+  touch-action: none;
+}
+.mark-overlay[hidden] { display: none; }
+.mark-overlay.is-page-excluded { opacity: 0.25; pointer-events: none; }
+.repeat-preview.is-page-excluded { opacity: 0.25; }
+
+.mark-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  white-space: nowrap;
+  user-select: none;
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+.mark-body:active { cursor: grabbing; }
+.mark-overlay.is-selected .mark-body {
+  box-shadow: 0 0 0 2px var(--seal-gold);
+}
+.mark-body span {
+  font-weight: 600;
+  line-height: 1;
+}
+#imageOverlayImg { display: block; pointer-events: none; user-select: none; }
+
+.mark-handle {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--seal-gold);
+  background: var(--ink-black);
+  color: var(--seal-gold);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+.mark-overlay.is-selected .mark-handle { display: flex; }
+.mark-handle--rotate { top: -30px; left: 50%; transform: translateX(-50%); cursor: grab; }
+.mark-handle--resize { bottom: -13px; right: -13px; cursor: nwse-resize; }
+
+.repeat-preview {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.repeat-preview[hidden] { display: none; }
+.repeat-preview span, .repeat-preview img {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  color: var(--graphite-light);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.page-nav button {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid #33373d;
+  background: transparent;
+  color: #d7d9db;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.page-nav button:hover:not(:disabled) { border-color: var(--brand-ink); color: var(--brand-ink); }
+
+/* ---------------- Stamp tray (contextual panel) ---------------- */
+
+.stamp-tray {
+  position: absolute;
+  top: 16px;
+  inset-inline-end: 16px;
+  width: 320px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  background: var(--ink-charcoal-2);
+  border: 1px solid #33373d;
+  border-radius: 10px;
+  box-shadow: var(--shadow-tray);
+  padding: 16px;
+  z-index: 15;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+}
+
+.stamp-tray-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  position: sticky;
+  top: -16px;
+  background: var(--ink-charcoal-2);
+  padding-top: 2px;
+}
+.tray-tabs { display: flex; gap: 4px; background: var(--ink-black); border: 1px solid #33373d; border-radius: 999px; padding: 3px; }
+.tray-tab {
+  border: none;
+  background: transparent;
+  color: var(--graphite-light);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+.tray-tab.is-active { background: var(--brand-ink); color: #06211d; }
+.tray-close {
+  background: transparent;
+  border: none;
+  color: var(--graphite-light);
+  font-size: 1rem;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.tray-close:hover { color: #fff; }
+.tray-panel[hidden] { display: none; }
+
+.tray-field { margin-bottom: 16px; }
+.tray-field:last-child { margin-bottom: 0; }
+.tray-field label,
+.tray-field-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--graphite-light);
+  margin-bottom: 6px;
+}
+.tray-field-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.tray-field-row output {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--brand-ink);
+}
+
+#watermarkText {
+  width: 100%;
+  background: var(--ink-black);
+  border: 1px solid #3a3e44;
+  border-radius: var(--radius-control);
+  padding: 9px 10px;
+  color: #f0f1f2;
+  font-size: 0.92rem;
+}
+#watermarkText:focus-visible { border-color: var(--brand-ink); }
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--brand-ink);
+  background: transparent;
+}
+
+.tray-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #e9eaec;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+.tray-check input { accent-color: var(--brand-ink); width: 15px; height: 15px; }
+
+.tray-select {
+  width: 100%;
+  background: var(--ink-black);
+  border: 1px solid #3a3e44;
+  border-radius: var(--radius-control);
+  padding: 8px 10px;
+  color: #f0f1f2;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+.tray-select:first-child { margin-top: 0; }
+
+.script-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.script-chip {
+  border: 1px solid #33373d;
+  background: #202327;
+  color: var(--graphite-light);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.script-chip.is-active { border-color: var(--brand-ink); background: rgba(18, 160, 140, 0.16); color: var(--brand-ink); }
+
+.style-row { display: flex; gap: 6px; }
+.style-btn {
+  width: 38px;
+  height: 34px;
+  border-radius: var(--radius-control);
+  border: 1px solid #33373d;
+  background: #202327;
+  color: #e9eaec;
+  font-size: 0.95rem;
+}
+.style-btn[aria-pressed="true"] { border-color: var(--brand-ink); background: rgba(18, 160, 140, 0.16); color: var(--brand-ink); }
+
+.quick-pos-row { display: flex; gap: 6px; }
+.quick-pos-row button {
+  flex: 1;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  border: 1px solid #33373d;
+  background: #202327;
+  position: relative;
+}
+.quick-pos-row button::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--graphite-light);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.quick-pos-row button.is-active { border-color: var(--brand-ink); background: rgba(18, 160, 140, 0.14); }
+.quick-pos-row button.is-active::after { background: var(--brand-ink); }
+
+.repeat-controls { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #33373d; }
+.repeat-controls[hidden] { display: none; }
+
+.logo-upload-btn { display: inline-block; width: 100%; text-align: center; }
+.logo-loaded-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.logo-loaded-row[hidden] { display: none; }
+.logo-loaded-row img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #33373d;
+}
+.logo-loaded-row span {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--graphite-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.color-row { display: flex; align-items: center; gap: 8px; }
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: var(--swatch, #333);
+  padding: 0;
+  position: relative;
+}
+.color-swatch.is-active { border-color: #fff; box-shadow: 0 0 0 2px var(--swatch, #333); }
+.color-swatch--custom {
+  background: conic-gradient(from 90deg, #c0392e, #c99a2e, #12a08c, #1f4e8c, #c0392e);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.color-swatch--custom input {
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* ---------------- Progress + toast ---------------- */
+
+.progress-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 22, 26, 0.86);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  border-radius: 10px;
+}
+.progress-box { display: flex; flex-direction: column; align-items: center; gap: 12px; color: #e9eaec; }
+.progress-spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid #33373d;
+  border-top-color: var(--brand-ink);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 40px));
+  background: var(--ink-charcoal-2);
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  padding: 16px;
+  z-index: 40;
+  box-shadow: var(--shadow-tray);
+}
+.toast-title { margin: 0 0 6px; font-weight: 600; color: #f5c9c4; }
+.toast-message { margin: 0 0 12px; color: #d7d9db; font-size: 0.9rem; line-height: 1.5; }
+.toast-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------------- Landing sections ---------------- */
+
+.landing-section {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 44px 20px;
+  border-top: 1px solid #21242a;
+}
+.landing-section h2 { font-size: 1.5rem; margin: 0 0 12px; }
+.landing-section p { color: var(--graphite-light); line-height: 1.65; margin: 0; }
+
+.roadmap-grid {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+.roadmap-grid li {
+  border: 1px solid #2b2f34;
+  border-radius: var(--radius-control);
+  padding: 12px 14px;
+  color: #cfd2d6;
+  font-size: 0.88rem;
+  background: var(--ink-charcoal);
+}
+
+#faqList details {
+  border-top: 1px solid #24272c;
+  padding: 14px 0;
+}
+#faqList details:first-child { border-top: none; }
+#faqList summary {
+  cursor: pointer;
+  color: #f0f1f2;
+  font-weight: 500;
+  list-style: none;
+}
+#faqList summary::-webkit-details-marker { display: none; }
+#faqList summary::before {
+  content: '+';
+  display: inline-block;
+  width: 1.2em;
+  color: var(--brand-ink);
+}
+#faqList details[open] summary::before { content: '−'; }
+#faqList p { color: var(--graphite-light); margin: 10px 0 0 1.2em; line-height: 1.6; }
+
+.site-footer {
+  text-align: center;
+  padding: 28px 20px 40px;
+  color: var(--graphite);
+  font-size: 0.82rem;
+}
+
+/* ---------------- RTL adjustments ---------------- */
+
+html[dir="rtl"] .toast { direction: rtl; }
+html[dir="rtl"] .rail-btn span { inset-inline-start: auto; inset-inline-end: 48px; }
+
+/* ---------------- Responsive ---------------- */
+
+@media (max-width: 860px) {
+  .editor { grid-template-columns: 48px 1fr; min-height: 70vh; }
+  .stamp-tray {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    inset-inline-end: 0;
+    border-radius: 16px 16px 0 0;
+    clip-path: none;
+    max-height: 72vh;
+    overflow-y: auto;
+  }
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
+  .topbar-file { order: 3; width: 100%; text-align: start; flex-basis: 100%; }
+}
+
+@media (max-width: 520px) {
+  .btn-lang { padding: 9px 10px; font-size: 0.8rem; }
+  .tool-hero { margin: 36px auto 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#workspace" data-i18n="openFile">Skip to workspace</a>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+      <path d="M15 3C10 10 6 14.5 6 19a9 9 0 0 0 18 0c0-4.5-4-9-9-16Z" fill="var(--brand-ink)"/>
+      <path d="M15 8.5c-2.8 4.3-5 7.3-5 10.2a5 5 0 0 0 10 0c0-2.9-2.2-5.9-5-10.2Z" fill="var(--brand-ink-deep)" opacity="0.55"/>
+    </svg>
+    <div class="brand-text">
+      <span class="brand-name" data-i18n="brandName">Inkwell</span>
+      <span class="brand-tag" data-i18n="brandTag">PDF marking studio</span>
+    </div>
+  </div>
+  <div class="topbar-file" id="fileNameDisplay" hidden></div>
+  <div class="topbar-actions">
+    <button type="button" class="btn btn-ghost btn-lang" id="langToggleBtn" data-i18n="langToggle">العربية</button>
+    <button type="button" class="btn btn-ghost" id="newFileBtn" data-i18n="newFile" hidden>Open another file</button>
+    <button type="button" class="btn btn-primary" id="downloadBtn" data-i18n="download" disabled>Download marked PDF</button>
+  </div>
+</header>
+
+<main>
+
+  <section class="tool-hero">
+    <h1 data-i18n="heroTitle">Mark up a PDF without sending it anywhere.</h1>
+    <p data-i18n="heroBody">Inkwell stamps text and logo watermarks onto your document entirely inside this browser tab — drag, rotate, tile, and link them, then download.</p>
+  </section>
+
+  <div class="ad-slot ad-slot--leaderboard" aria-label="Advertisement space">
+    <span class="ad-slot-label">Advertisement</span>
+  </div>
+
+  <section id="workspace" class="workspace" aria-label="PDF watermark workspace">
+
+    <div id="dropzone" class="dropzone">
+      <input type="file" id="fileInput" accept="application/pdf" hidden />
+      <div class="dropzone-icon" aria-hidden="true">
+        <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+          <rect x="9" y="4" width="26" height="34" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M15 15h14M15 22h14M15 29h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <p class="dropzone-hint" data-i18n="dropHint">Drop a PDF here, or choose a file to begin</p>
+      <button type="button" class="btn btn-primary" id="chooseFileBtn" data-i18n="openFile">Open a PDF</button>
+      <p class="privacy-note" data-i18n="privacyNote">Your file stays on this device. Nothing is uploaded.</p>
+    </div>
+
+    <div id="editor" class="editor" hidden>
+
+      <aside class="tool-rail" aria-label="Watermark layer">
+        <button type="button" class="rail-btn is-active" id="textModeBtn" aria-pressed="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span data-i18n="textLabel">Text</span>
+        </button>
+        <button type="button" class="rail-btn" id="logoModeBtn" aria-pressed="false">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/><path d="M4 14l4-4 3 3 3-4 3 5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          <span data-i18n="logoLabel">Logo</span>
+        </button>
+      </aside>
+
+      <div class="canvas-area">
+        <p class="stamp-hint" id="stampHint" data-i18n="stampHint">Drag a mark to reposition it, or use the panel to fine-tune</p>
+        <div class="canvas-scroll" id="canvasScroll">
+          <div class="page-sheet" id="pageSheet">
+            <canvas id="pdfCanvas"></canvas>
+
+            <div class="mark-overlay" id="textOverlay" data-layer="text">
+              <div class="mark-body" id="textOverlayBody">
+                <span id="textOverlayText">CONFIDENTIAL</span>
+              </div>
+              <button type="button" class="mark-handle mark-handle--rotate" id="textRotateHandle" aria-label="Rotate text watermark">↻</button>
+              <button type="button" class="mark-handle mark-handle--resize" id="textResizeHandle" aria-label="Resize text watermark">⤡</button>
+            </div>
+
+            <div class="mark-overlay" id="imageOverlay" data-layer="image" hidden>
+              <div class="mark-body" id="imageOverlayBody">
+                <img id="imageOverlayImg" alt="Logo watermark preview" />
+              </div>
+              <button type="button" class="mark-handle mark-handle--rotate" id="imageRotateHandle" aria-label="Rotate logo watermark">↻</button>
+              <button type="button" class="mark-handle mark-handle--resize" id="imageResizeHandle" aria-label="Resize logo watermark">⤡</button>
+            </div>
+
+            <div class="repeat-preview" id="textRepeatPreview" hidden></div>
+            <div class="repeat-preview" id="imageRepeatPreview" hidden></div>
+          </div>
+        </div>
+        <div class="page-nav">
+          <button type="button" id="prevPageBtn" aria-label="Previous page" data-i18n-aria="prevPage">‹</button>
+          <span id="pageIndicator">1 / 1</span>
+          <button type="button" id="nextPageBtn" aria-label="Next page" data-i18n-aria="nextPage">›</button>
+        </div>
+      </div>
+
+      <div class="stamp-tray" id="stampTray">
+        <div class="stamp-tray-header">
+          <div class="tray-tabs" role="tablist" aria-label="Watermark layer settings">
+            <button type="button" class="tray-tab is-active" id="textTabBtn" role="tab" aria-selected="true" data-i18n="textLabel">Text</button>
+            <button type="button" class="tray-tab" id="logoTabBtn" role="tab" aria-selected="false" data-i18n="logoLabel">Logo</button>
+          </div>
+          <button type="button" class="tray-close" id="trayCloseBtn" aria-label="Close">✕</button>
+        </div>
+
+        <div class="tray-panel" id="textPanel">
+          <div class="tray-field">
+            <div class="tray-field-row">
+              <label for="textEnabled" class="tray-check"><input type="checkbox" id="textEnabled" checked /> <span data-i18n="enableText">Show text watermark</span></label>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label for="watermarkText" data-i18n="textLabel">Text</label>
+            <input type="text" id="watermarkText" maxlength="80" data-i18n-placeholder="textPlaceholder" placeholder="e.g. CONFIDENTIAL" />
+          </div>
+
+          <div class="tray-field">
+            <span class="tray-field-label" data-i18n="scriptLabel">Script &amp; font</span>
+            <div class="script-row" id="scriptRow"></div>
+            <select id="fontFamilySelect" class="tray-select"></select>
+          </div>
+
+          <div class="tray-field">
+            <div class="style-row">
+              <button type="button" class="style-btn" id="boldBtn" aria-pressed="false"><b>B</b></button>
+              <button type="button" class="style-btn" id="italicBtn" aria-pressed="false"><i>I</i></button>
+              <button type="button" class="style-btn" id="underlineBtn" aria-pressed="false"><u>U</u></button>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <span class="tray-field-label" data-i18n="colorLabel">Ink color</span>
+            <div class="color-row" id="colorRow" role="group" aria-label="Ink color">
+              <button type="button" class="color-swatch is-active" data-color="#1B1D1F" style="--swatch:#1B1D1F" aria-label="Black"></button>
+              <button type="button" class="color-swatch" data-color="#C0392E" style="--swatch:#C0392E" aria-label="Red"></button>
+              <button type="button" class="color-swatch" data-color="#1F4E8C" style="--swatch:#1F4E8C" aria-label="Blue"></button>
+              <button type="button" class="color-swatch" data-color="#0F7B6C" style="--swatch:#0F7B6C" aria-label="Teal"></button>
+              <label class="color-swatch color-swatch--custom" data-i18n-aria="customColor" aria-label="Custom color">
+                <input type="color" id="customColorInput" value="#1B1D1F" />
+              </label>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="fontSizeRange" data-i18n="sizeLabel">Size</label><output id="fontSizeReadout">36pt</output></div>
+            <input type="range" id="fontSizeRange" min="8" max="160" value="36" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="opacityRange" data-i18n="opacityLabel">Opacity</label><output id="opacityReadout">35%</output></div>
+            <input type="range" id="opacityRange" min="5" max="100" value="35" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="rotationRange" data-i18n="rotationLabel">Angle</label><output id="rotationReadout">45°</output></div>
+            <input type="range" id="rotationRange" min="-180" max="180" value="45" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <span class="tray-field-label" data-i18n="quickPositionLabel">Quick position</span>
+            <div class="quick-pos-row" id="textQuickPos">
+              <button type="button" data-pos="top-left" aria-label="Top left"></button>
+              <button type="button" data-pos="top-center" aria-label="Top center"></button>
+              <button type="button" data-pos="center" aria-label="Center" class="is-active"></button>
+              <button type="button" data-pos="bottom-center" aria-label="Bottom center"></button>
+              <button type="button" data-pos="bottom-right" aria-label="Bottom right"></button>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label for="textLayerOrder" data-i18n="layerOrderLabel">Layer order</label>
+            <select id="textLayerOrder" class="tray-select">
+              <option value="over" selected data-i18n="overContent">Over page content</option>
+              <option value="under" data-i18n="underContent">Behind page content</option>
+            </select>
+          </div>
+
+          <div class="tray-field">
+            <label for="textPageMode" data-i18n="pagesLabel">Pages</label>
+            <select id="textPageMode" class="tray-select">
+              <option value="all" selected data-i18n="allPages">All pages</option>
+              <option value="custom" data-i18n="customPages">Custom range</option>
+            </select>
+            <input type="text" id="textPageRange" class="tray-select" placeholder="1-3,5,7" hidden />
+          </div>
+
+          <div class="tray-field">
+            <label class="tray-check"><input type="checkbox" id="textRepeat" /> <span data-i18n="repeatLabel">Repeat across the page</span></label>
+            <div class="repeat-controls" id="textRepeatControls" hidden>
+              <select id="textRepeatPattern" class="tray-select">
+                <option value="grid" data-i18n="patternGrid">Grid</option>
+                <option value="dense" data-i18n="patternDense">Dense</option>
+                <option value="wide" data-i18n="patternWide">Wide</option>
+                <option value="diagonal" data-i18n="patternDiagonal">Diagonal</option>
+              </select>
+              <div class="tray-field-row"><span data-i18n="gapLabel">Gap</span><output id="textGapReadout">80pt</output></div>
+              <input type="range" id="textGapRange" min="10" max="300" value="80" step="5" />
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label class="tray-check"><input type="checkbox" id="textLinkEnabled" /> <span data-i18n="linkLabel">Make it a link</span></label>
+            <input type="url" id="textLinkUrl" class="tray-select" placeholder="https://example.com" hidden />
+          </div>
+        </div>
+
+        <div class="tray-panel" id="logoPanel" hidden>
+          <div class="tray-field">
+            <div id="logoUploadRow">
+              <label class="btn btn-ghost logo-upload-btn" for="logoInput" data-i18n="uploadLogo">Upload a logo (PNG/JPG)</label>
+              <input type="file" id="logoInput" accept="image/png,image/jpeg" hidden />
+            </div>
+            <div id="logoLoadedRow" class="logo-loaded-row" hidden>
+              <img id="logoThumb" alt="Logo thumbnail" />
+              <span id="logoFileNameLabel"></span>
+              <button type="button" class="btn btn-ghost" id="logoRemoveBtn" data-i18n="removeLogo">Remove</button>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="imageWidthRange" data-i18n="widthLabel">Width</label><output id="imageWidthReadout">160pt</output></div>
+            <input type="range" id="imageWidthRange" min="20" max="500" value="160" step="5" />
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="imageOpacityRange" data-i18n="opacityLabel">Opacity</label><output id="imageOpacityReadout">80%</output></div>
+            <input type="range" id="imageOpacityRange" min="5" max="100" value="80" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <div class="tray-field-row"><label for="imageRotationRange" data-i18n="rotationLabel">Angle</label><output id="imageRotationReadout">0°</output></div>
+            <input type="range" id="imageRotationRange" min="-180" max="180" value="0" step="1" />
+          </div>
+
+          <div class="tray-field">
+            <span class="tray-field-label" data-i18n="quickPositionLabel">Quick position</span>
+            <div class="quick-pos-row" id="imageQuickPos">
+              <button type="button" data-pos="top-left" aria-label="Top left"></button>
+              <button type="button" data-pos="top-center" aria-label="Top center"></button>
+              <button type="button" data-pos="center" aria-label="Center" class="is-active"></button>
+              <button type="button" data-pos="bottom-center" aria-label="Bottom center"></button>
+              <button type="button" data-pos="bottom-right" aria-label="Bottom right"></button>
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label for="imageLayerOrder" data-i18n="layerOrderLabel">Layer order</label>
+            <select id="imageLayerOrder" class="tray-select">
+              <option value="over" selected data-i18n="overContent">Over page content</option>
+              <option value="under" data-i18n="underContent">Behind page content</option>
+            </select>
+          </div>
+
+          <div class="tray-field">
+            <label for="imagePageMode" data-i18n="pagesLabel">Pages</label>
+            <select id="imagePageMode" class="tray-select">
+              <option value="all" selected data-i18n="allPages">All pages</option>
+              <option value="custom" data-i18n="customPages">Custom range</option>
+            </select>
+            <input type="text" id="imagePageRange" class="tray-select" placeholder="1-3,5,7" hidden />
+          </div>
+
+          <div class="tray-field">
+            <label class="tray-check"><input type="checkbox" id="imageRepeat" /> <span data-i18n="repeatLabel">Repeat across the page</span></label>
+            <div class="repeat-controls" id="imageRepeatControls" hidden>
+              <select id="imageRepeatPattern" class="tray-select">
+                <option value="grid" data-i18n="patternGrid">Grid</option>
+                <option value="dense" data-i18n="patternDense">Dense</option>
+                <option value="wide" data-i18n="patternWide">Wide</option>
+                <option value="diagonal" data-i18n="patternDiagonal">Diagonal</option>
+              </select>
+              <div class="tray-field-row"><span data-i18n="gapLabel">Gap</span><output id="imageGapReadout">80pt</output></div>
+              <input type="range" id="imageGapRange" min="10" max="300" value="80" step="5" />
+            </div>
+          </div>
+
+          <div class="tray-field">
+            <label class="tray-check"><input type="checkbox" id="imageLinkEnabled" /> <span data-i18n="linkLabel">Make it a link</span></label>
+            <input type="url" id="imageLinkUrl" class="tray-select" placeholder="https://example.com" hidden />
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="progressOverlay" class="progress-overlay" hidden>
+      <div class="progress-box">
+        <div class="progress-spinner" aria-hidden="true"></div>
+        <p id="progressLabel">Working…</p>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden role="alert" aria-live="assertive">
+      <p class="toast-title" id="toastTitle"></p>
+      <p class="toast-message" id="toastMessage"></p>
+      <div class="toast-actions">
+        <button type="button" id="toastContinueBtn" class="btn btn-ghost" hidden></button>
+        <button type="button" id="toastDismissBtn" class="btn btn-primary"></button>
+      </div>
+    </div>
+
+  </section>
+
+  <section class="landing-section" id="how">
+    <h2 data-i18n="sectionHowTitle">How it works</h2>
+    <p data-i18n="sectionHowBody">Open a file, click the watermark on the page to reveal its controls, dial in the text, size, color, angle, and placement, then download the result.</p>
+  </section>
+
+  <div class="ad-slot ad-slot--in-content" aria-label="Advertisement space">
+    <span class="ad-slot-label">Advertisement</span>
+  </div>
+
+  <section class="landing-section" id="privacy">
+    <h2 data-i18n="sectionPrivacyTitle">Why nothing gets uploaded</h2>
+    <p data-i18n="sectionPrivacyBody">Inkwell reads your PDF using your browser's own PDF engine and writes the watermark back into the file locally.</p>
+  </section>
+
+  <section class="landing-section" id="roadmap">
+    <h2 data-i18n="sectionRoadmapTitle">What comes next</h2>
+    <p data-i18n="sectionRoadmapBody">The watermark engine here is built as a small, reusable piece.</p>
+    <ul class="roadmap-grid" id="roadmapGrid"></ul>
+  </section>
+
+  <section class="landing-section" id="faq">
+    <h2 data-i18n="faqTitle">Questions</h2>
+    <div id="faqList"></div>
+  </section>
+
+  <div class="ad-slot ad-slot--pre-footer" aria-label="Advertisement space">
+    <span class="ad-slot-label">Advertisement</span>
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <p data-i18n="footerRights">Built to keep your documents on your device.</p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script>
+/* ---- js/i18n.js ---- */
+// i18n.js
+// Small, dependency-free translation layer. English and Arabic are first-class
+// citizens here, not an afterthought bolted onto an English-only string set —
+// every user-facing string in the app is looked up through t(key).
+
+const LOCALES = {
+  en: {
+    dir: 'ltr',
+    code: 'en',
+    label: 'English',
+    strings: {
+      brandName: 'Inkwell',
+      brandTag: 'PDF marking studio',
+      openFile: 'Open a PDF',
+      dropHint: 'Drop a PDF here, or choose a file to begin',
+      dropActive: 'Release to load',
+      newFile: 'Open another file',
+      download: 'Download marked PDF',
+      downloading: 'Preparing your file…',
+      pageOf: 'Page {current} of {total}',
+      prevPage: 'Previous page',
+      nextPage: 'Next page',
+      stampLabel: 'Watermark',
+      stampHint: 'Tap the mark on the page to adjust it',
+      textLabel: 'Text',
+      textPlaceholder: 'e.g. CONFIDENTIAL',
+      sizeLabel: 'Size',
+      opacityLabel: 'Opacity',
+      rotationLabel: 'Angle',
+      colorLabel: 'Ink color',
+      positionLabel: 'Placement',
+      positionNames: {
+        'top-left': 'Top left', 'top-center': 'Top center', 'top-right': 'Top right',
+        'middle-left': 'Middle left', 'middle-center': 'Center', 'middle-right': 'Middle right',
+        'bottom-left': 'Bottom left', 'bottom-center': 'Bottom center', 'bottom-right': 'Bottom right'
+      },
+      customColor: 'Custom',
+      applyToAllPages: 'Apply to every page',
+      logoLabel: 'Logo',
+      enableText: 'Show text watermark',
+      scriptLabel: 'Script & font',
+      quickPositionLabel: 'Quick position',
+      layerOrderLabel: 'Layer order',
+      overContent: 'Over page content',
+      underContent: 'Behind page content',
+      pagesLabel: 'Pages',
+      allPages: 'All pages',
+      customPages: 'Custom range',
+      repeatLabel: 'Repeat across the page',
+      patternGrid: 'Grid',
+      patternDense: 'Dense',
+      patternWide: 'Wide',
+      patternDiagonal: 'Diagonal',
+      gapLabel: 'Gap',
+      linkLabel: 'Make it a link',
+      uploadLogo: 'Upload a logo (PNG/JPG)',
+      removeLogo: 'Remove',
+      widthLabel: 'Width',
+      errInvalidLink: "That link doesn't look right. Use a full web address, like https://example.com.",
+      errInvalidImage: 'Please choose a PNG or JPG image.',
+      langToggle: 'العربية',
+      errTitle: "That didn't work",
+      errInvalidPdf: "This file doesn't look like a valid PDF. Try exporting it again and re-uploading.",
+      errPasswordPdf: 'This PDF is protected with a password. Remove the password and try again.',
+      errTooLarge: "This file is quite large ({size}). Processing may be slow on this device — you can still continue.",
+      errGenericProcessing: 'Something went wrong while marking the PDF. No file was sent anywhere — you can try again.',
+      errBrowser: 'Your browser is missing a feature this tool needs. Try the latest Chrome, Edge, Firefox, or Safari.',
+      errMemory: "The document is too large for this device's memory. Try a smaller file or a different device.",
+      dismiss: 'Dismiss',
+      continueAnyway: 'Continue anyway',
+      privacyNote: 'Your file stays on this device. Nothing is uploaded.',
+      progressRendering: 'Opening pages…',
+      progressStamping: 'Placing the watermark…',
+      progressFinalizing: 'Finalizing your PDF…',
+      heroTitle: 'Mark up a PDF without sending it anywhere.',
+      heroBody: 'Inkwell stamps text and logo watermarks onto your document entirely inside this browser tab — drag, rotate, tile, and link them, then download. The file never leaves your device.',
+      heroCta: 'Start marking a PDF',
+      sectionHowTitle: 'How it works',
+      sectionHowBody: 'Open a file, then drag the text or logo mark right on the page — use the handles to rotate and resize it, or fine-tune everything from the side panel: font, color, opacity, which pages it appears on, whether it repeats across the page, and whether it links somewhere. Then download the result.',
+      sectionPrivacyTitle: 'Why nothing gets uploaded',
+      sectionPrivacyBody: "Inkwell reads your PDF using your browser's own PDF engine and writes the watermark back into the file using a PDF-writing library that also runs locally. No network request ever carries your document's bytes. That means contracts, IDs, and drafts can be marked here without a copy ever sitting on a server.",
+      sectionRoadmapTitle: 'What comes next',
+      sectionRoadmapBody: 'Text and logo watermarks already share one small, reusable engine: a tool draws a mark and places it on a page. The same document workspace is built to grow into merging, splitting, compressing, rotating, and converting PDFs — each as its own focused tool sharing this workspace.',
+      roadmapItems: ['Merge PDFs', 'Split PDFs', 'Compress PDFs', 'Rotate pages', 'PDF to JPG', 'JPG to PDF', 'PDF OCR', 'PDF to text'],
+      faqTitle: 'Questions',
+      faq: [
+        { q: 'Does my PDF get uploaded to a server?', a: "No. The file is read and rewritten inside your browser tab. Closing the tab clears everything; nothing is stored or transmitted." },
+        { q: 'Can I watermark a password-protected PDF?', a: 'Remove the password first with your PDF reader, then upload the unlocked file here.' },
+        { q: 'Does this work with Arabic or other right-to-left text?', a: 'Yes. Watermark text is drawn using your browser\u2019s own text engine, so Arabic, Hebrew, and other scripts are shaped and positioned correctly.' },
+        { q: 'Is there a file size limit?', a: "There's no hard limit, but very large PDFs use more of your device's memory, since everything happens locally rather than on a server." },
+        { q: 'Will the text in my watermark stay selectable?', a: 'Plain Latin text is drawn as real, selectable text. Text using other scripts is drawn as a sharp image so it renders correctly everywhere.' }
+      ],
+      footerRights: 'Built to keep your documents on your device.',
+    }
+  },
+  ar: {
+    dir: 'rtl',
+    code: 'ar',
+    label: 'العربية',
+    strings: {
+      brandName: 'إنكويل',
+      brandTag: 'استوديو وسم PDF',
+      openFile: 'افتح ملف PDF',
+      dropHint: 'أفلت ملف PDF هنا، أو اختر ملفًا للبدء',
+      dropActive: 'أفلت الآن للتحميل',
+      newFile: 'فتح ملف آخر',
+      download: 'تنزيل الملف الموسوم',
+      downloading: 'جارٍ تجهيز الملف…',
+      pageOf: 'صفحة {current} من {total}',
+      prevPage: 'الصفحة السابقة',
+      nextPage: 'الصفحة التالية',
+      stampLabel: 'العلامة المائية',
+      stampHint: 'اضغط على العلامة في الصفحة لتعديلها',
+      textLabel: 'النص',
+      textPlaceholder: 'مثال: سري',
+      sizeLabel: 'الحجم',
+      opacityLabel: 'الشفافية',
+      rotationLabel: 'الزاوية',
+      colorLabel: 'لون الحبر',
+      positionLabel: 'الموضع',
+      positionNames: {
+        'top-left': 'أعلى اليسار', 'top-center': 'أعلى الوسط', 'top-right': 'أعلى اليمين',
+        'middle-left': 'وسط اليسار', 'middle-center': 'المنتصف', 'middle-right': 'وسط اليمين',
+        'bottom-left': 'أسفل اليسار', 'bottom-center': 'أسفل الوسط', 'bottom-right': 'أسفل اليمين'
+      },
+      customColor: 'مخصص',
+      applyToAllPages: 'تطبيق على كل الصفحات',
+      logoLabel: 'الشعار',
+      enableText: 'إظهار العلامة النصية',
+      scriptLabel: 'النص والخط',
+      quickPositionLabel: 'موضع سريع',
+      layerOrderLabel: 'ترتيب الطبقة',
+      overContent: 'فوق محتوى الصفحة',
+      underContent: 'خلف محتوى الصفحة',
+      pagesLabel: 'الصفحات',
+      allPages: 'كل الصفحات',
+      customPages: 'نطاق مخصص',
+      repeatLabel: 'تكرار عبر الصفحة',
+      patternGrid: 'شبكة',
+      patternDense: 'كثيف',
+      patternWide: 'واسع',
+      patternDiagonal: 'قطري',
+      gapLabel: 'المسافة',
+      linkLabel: 'اجعلها رابطًا',
+      uploadLogo: 'ارفع شعارًا (PNG/JPG)',
+      removeLogo: 'إزالة',
+      widthLabel: 'العرض',
+      errInvalidLink: 'هذا الرابط غير صحيح. استخدم عنوانًا كاملاً مثل https://example.com.',
+      errInvalidImage: 'يرجى اختيار صورة PNG أو JPG.',
+      langToggle: 'English',
+      errTitle: 'لم ينجح ذلك',
+      errInvalidPdf: 'هذا الملف لا يبدو ملف PDF صالحًا. حاول تصديره من جديد وأعد الرفع.',
+      errPasswordPdf: 'هذا الملف محمي بكلمة مرور. أزل كلمة المرور ثم حاول مرة أخرى.',
+      errTooLarge: 'هذا الملف كبير نسبيًا ({size}). قد تكون المعالجة بطيئة على هذا الجهاز — يمكنك المتابعة رغم ذلك.',
+      errGenericProcessing: 'حدث خطأ أثناء وسم الملف. لم يُرسل أي شيء إلى أي جهة — يمكنك المحاولة من جديد.',
+      errBrowser: 'متصفحك يفتقد ميزة يحتاجها هذا الأداة. جرّب أحدث إصدار من Chrome أو Edge أو Firefox أو Safari.',
+      errMemory: 'المستند أكبر من ذاكرة هذا الجهاز. جرّب ملفًا أصغر أو جهازًا آخر.',
+      dismiss: 'إغلاق',
+      continueAnyway: 'المتابعة رغم ذلك',
+      privacyNote: 'يبقى ملفك على هذا الجهاز. لا شيء يُرفع.',
+      progressRendering: 'جارٍ فتح الصفحات…',
+      progressStamping: 'جارٍ وضع العلامة…',
+      progressFinalizing: 'جارٍ إنهاء الملف…',
+      heroTitle: 'ضع علامة على ملف PDF دون إرساله إلى أي مكان.',
+      heroBody: 'يضع إنكويل علامات نصية وشعارات على مستندك بالكامل داخل نافذة المتصفح هذه — اسحبها، دوّرها، كرّرها عبر الصفحة، واربطها، ثم نزّل الناتج. الملف لا يغادر جهازك أبدًا.',
+      heroCta: 'ابدأ وسم ملف PDF',
+      sectionHowTitle: 'كيف يعمل',
+      sectionHowBody: 'افتح ملفًا، ثم اسحب العلامة النصية أو الشعار مباشرة على الصفحة — استخدم المقابض للتدوير وتغيير الحجم، أو اضبط كل شيء من اللوحة الجانبية: الخط واللون والشفافية، والصفحات التي تظهر عليها العلامة، وما إذا كانت تتكرر عبر الصفحة، وما إذا كانت رابطًا. ثم نزّل الناتج.',
+      sectionPrivacyTitle: 'لماذا لا يُرفع شيء',
+      sectionPrivacyBody: 'يقرأ إنكويل ملف PDF باستخدام محرك PDF الخاص بمتصفحك، ثم يكتب العلامة المائية داخل الملف باستخدام مكتبة كتابة PDF تعمل أيضًا محليًا. لا يحمل أي طلب شبكة بايتات مستندك أبدًا. هذا يعني إمكانية وسم العقود والهويات والمسودات هنا دون أن تبقى نسخة منها على أي خادم أبدًا.',
+      sectionRoadmapTitle: 'ما القادم',
+      sectionRoadmapBody: 'تشترك العلامتان النصية والشعار بالفعل في محرك واحد صغير قابل لإعادة الاستخدام: أداة ترسم علامة وتضعها على صفحة. مساحة العمل نفسها مبنية لتتوسع لتشمل دمج ملفات PDF وتقسيمها وضغطها وتدويرها وتحويلها — كل واحدة كأداة مستقلة تشارك مساحة العمل هذه.',
+      roadmapItems: ['دمج ملفات PDF', 'تقسيم ملفات PDF', 'ضغط ملفات PDF', 'تدوير الصفحات', 'PDF إلى JPG', 'JPG إلى PDF', 'التعرف الضوئي على النص', 'PDF إلى نص'],
+      faqTitle: 'أسئلة شائعة',
+      faq: [
+        { q: 'هل يُرفع ملف PDF الخاص بي إلى خادم؟', a: 'لا. تتم قراءة الملف وإعادة كتابته داخل نافذة متصفحك. إغلاق النافذة يمسح كل شيء؛ لا يُخزَّن أو يُرسَل أي شيء.' },
+        { q: 'هل يمكنني وسم ملف PDF محمي بكلمة مرور؟', a: 'أزل كلمة المرور أولًا باستخدام قارئ PDF لديك، ثم ارفع الملف غير المحمي هنا.' },
+        { q: 'هل يعمل هذا مع النص العربي أو نصوص أخرى من اليمين لليسار؟', a: 'نعم. يُرسم نص العلامة المائية باستخدام محرك النص الخاص بمتصفحك، لذا تُشكَّل العربية والعبرية وغيرها وتُوضع بشكل صحيح.' },
+        { q: 'هل هناك حد لحجم الملف؟', a: 'لا يوجد حد صارم، لكن ملفات PDF الكبيرة جدًا تستهلك ذاكرة جهازك أكثر، لأن كل شيء يحدث محليًا بدلًا من خادم.' },
+        { q: 'هل يبقى نص العلامة المائية قابلًا للتحديد؟', a: 'يُرسم النص اللاتيني البسيط كنص حقيقي قابل للتحديد. أما النصوص بخطوط أخرى فتُرسم كصورة واضحة لضمان ظهورها بشكل صحيح في كل مكان.' }
+      ],
+      footerRights: 'صُمم لإبقاء مستنداتك على جهازك.',
+    }
+  }
+};
+
+let currentLocale = 'en';
+
+function setLocale(code) {
+  if (LOCALES[code]) currentLocale = code;
+}
+
+function getLocale() {
+  return currentLocale;
+}
+
+function t(key, vars) {
+  const parts = key.split('.');
+  let node = LOCALES[currentLocale].strings;
+  for (const p of parts) {
+    if (node == null) break;
+    node = node[p];
+  }
+  if (typeof node !== 'string') return node;
+  if (!vars) return node;
+  return node.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : `{${k}}`));
+}
+
+function applyStaticTranslations(root = document) {
+  root.querySelectorAll('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n');
+    const value = t(key);
+    if (typeof value === 'string') el.textContent = value;
+  });
+  root.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    const value = t(key);
+    if (typeof value === 'string') el.setAttribute('placeholder', value);
+  });
+  root.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-aria');
+    const value = t(key);
+    if (typeof value === 'string') el.setAttribute('aria-label', value);
+  });
+}
+
+/* ---- js/scripts.js ---- */
+// scripts.js
+// Maps watermark text to a script "bucket" — a couple of curated Google
+// Fonts and a text direction — so typing in a new script picks a sane
+// default automatically, the same way the language chips let you pick one
+// on purpose. This is what the raster fallback in watermark-engine.js relies
+// on to render any script correctly: it just needs a font-family stack.
+
+const SCRIPTS = [
+  {
+    id: 'latin', label: 'Latin', rtl: false, detect: null,
+    fonts: [
+      { value: 'IBM Plex Sans', stack: "'IBM Plex Sans', sans-serif" },
+      { value: 'Fraunces', stack: "'Fraunces', serif" },
+    ],
+  },
+  {
+    id: 'arabic', label: 'Arabic', rtl: true, detect: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/,
+    fonts: [
+      { value: 'Noto Naskh Arabic', stack: "'Noto Naskh Arabic', serif" },
+      { value: 'Cairo', stack: "'Cairo', sans-serif" },
+    ],
+  },
+  {
+    id: 'hebrew', label: 'Hebrew', rtl: true, detect: /[\u0590-\u05FF]/,
+    fonts: [
+      { value: 'Noto Sans Hebrew', stack: "'Noto Sans Hebrew', sans-serif" },
+      { value: 'Rubik', stack: "'Rubik', sans-serif" },
+    ],
+  },
+  {
+    id: 'devanagari', label: 'Devanagari', rtl: false, detect: /[\u0900-\u097F]/,
+    fonts: [
+      { value: 'Noto Sans Devanagari', stack: "'Noto Sans Devanagari', sans-serif" },
+      { value: 'Hind', stack: "'Hind', sans-serif" },
+    ],
+  },
+  {
+    id: 'cjk', label: 'CJK', rtl: false, detect: /[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF\uAC00-\uD7AF]/,
+    fonts: [{ value: 'Noto Sans SC', stack: "'Noto Sans SC', sans-serif" }],
+  },
+  {
+    id: 'cyrillic', label: 'Cyrillic', rtl: false, detect: /[\u0400-\u04FF]/,
+    fonts: [
+      { value: 'Noto Sans', stack: "'Noto Sans', sans-serif" },
+      { value: 'PT Sans', stack: "'PT Sans', sans-serif" },
+    ],
+  },
+];
+
+function detectScriptId(text) {
+  const found = SCRIPTS.find((s) => s.detect && s.detect.test(text));
+  return found ? found.id : 'latin';
+}
+
+function getScript(id) {
+  return SCRIPTS.find((s) => s.id === id) || SCRIPTS[0];
+}
+
+function getFontStack(scriptId, fontValue) {
+  const script = getScript(scriptId);
+  const match = script.fonts.find((f) => f.value === fontValue);
+  return (match || script.fonts[0]).stack;
+}
+
+/* ---- js/pdf-view.js ---- */
+// pdf-view.js
+// Thin wrapper around PDF.js: load a file into memory, render one page at a
+// time to a canvas, and report page geometry in PDF points (not pixels) so
+// the rest of the app can reason about real document coordinates.
+
+const WORKER_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+
+let pdfjsLibPromise = null;
+
+async function getPdfjsLib() {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs')
+      .then((lib) => {
+        lib.GlobalWorkerOptions.workerSrc = WORKER_SRC;
+        return lib;
+      });
+  }
+  return pdfjsLibPromise;
+}
+
+class WrongPasswordError extends Error {}
+class InvalidPdfError extends Error {}
+
+class PdfDocumentView {
+  constructor() {
+    this.pdfjsDoc = null;
+    this.rawBytes = null;
+    this.pageCount = 0;
+  }
+
+  /**
+   * @param {ArrayBuffer} arrayBuffer
+   */
+  async load(arrayBuffer) {
+    // Keep a pristine copy: pdf.js detaches/consumes typed arrays in some
+    // versions, and pdf-lib needs its own untouched copy later.
+    this.rawBytes = new Uint8Array(arrayBuffer.slice(0));
+    const pdfjsLib = await getPdfjsLib();
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
+    try {
+      this.pdfjsDoc = await loadingTask.promise;
+    } catch (err) {
+      if (err && err.name === 'PasswordException') {
+        throw new WrongPasswordError('Password protected PDF');
+      }
+      throw new InvalidPdfError(err && err.message ? err.message : 'Invalid PDF');
+    }
+    this.pageCount = this.pdfjsDoc.numPages;
+    return this.pageCount;
+  }
+
+  /**
+   * Renders a page onto the given canvas at a CSS pixel width target,
+   * returning the page's true size in PDF points and the render scale used
+   * (pixels per point) so callers can map overlay UI to real coordinates.
+   */
+  async renderPage(pageNumber, canvas, targetCssWidth) {
+    const page = await this.pdfjsDoc.getPage(pageNumber);
+    const unscaledViewport = page.getViewport({ scale: 1 });
+    const pagePointWidth = unscaledViewport.width;
+    const pagePointHeight = unscaledViewport.height;
+
+    const dpr = window.devicePixelRatio || 1;
+    const cssScale = targetCssWidth / pagePointWidth;
+    const renderScale = cssScale * dpr;
+
+    const viewport = page.getViewport({ scale: renderScale });
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    canvas.style.width = `${Math.ceil(viewport.width / dpr)}px`;
+    canvas.style.height = `${Math.ceil(viewport.height / dpr)}px`;
+
+    const context = canvas.getContext('2d');
+    await page.render({ canvasContext: context, viewport }).promise;
+
+    return {
+      pagePointWidth,
+      pagePointHeight,
+      cssWidth: viewport.width / dpr,
+      cssHeight: viewport.height / dpr,
+      pointsToCssPixels: cssScale,
+    };
+  }
+
+  getRawBytes() {
+    return this.rawBytes;
+  }
+}
+
+/* ---- js/watermark-engine.js ---- */
+// watermark-engine.js
+//
+// Architecture note:
+// A watermark "layer" (text or image) is described declaratively — content,
+// position as a ratio of the page, rotation, opacity, repeat pattern, page
+// range, optional link — and this module turns that description into marks
+// on a PDF. Two content types feed the same drawing primitives:
+//   - Plain Latin/ASCII text -> real vector text (crisp, small, selectable).
+//   - Anything else (another script, or a logo image) -> a raster image.
+// Both go through the same centerAnchoredXY() placement math, so rotation
+// always turns content around its own visual center — not the corner pdf-lib
+// would otherwise pivot on — for text and images alike.
+
+const PDFLib = window.PDFLib;
+const { PDFName, PDFArray, PDFString, StandardFonts, rgb, degrees } = PDFLib;
+
+const ASCII_SAFE = /^[\x20-\x7E]*$/;
+
+const TILE_PATTERNS = ['grid', 'dense', 'wide', 'diagonal'];
+
+function hexToRgb01(hex) {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16) / 255;
+  const g = parseInt(clean.substring(2, 4), 16) / 255;
+  const b = parseInt(clean.substring(4, 6), 16) / 255;
+  return { r, g, b };
+}
+
+function needsRasterFallback(text) {
+  return !ASCII_SAFE.test(text);
+}
+
+/**
+ * On-screen rotation is "clockwise, like a clock face," matching the slider
+ * and the CSS preview. This is the one place that number is converted into
+ * the angle pdf-lib's `rotate` option expects, so a sign mismatch (if one is
+ * ever found against a specific pdf-lib build) only needs fixing here.
+ */
+function toPdfRadians(uiDegreesClockwise) {
+  return (uiDegreesClockwise * Math.PI) / 180;
+}
+
+/**
+ * The math that makes rotation feel right: pdf-lib's drawText/drawImage
+ * rotate around the (x, y) point you give them, and that same point is also
+ * where the content's bottom-left corner lands. Left alone, rotating a box
+ * "around its corner" makes it swing away from where you put it. Given the
+ * box's true center and its width/height, this solves for the corner
+ * position that keeps the center fixed under rotation instead.
+ */
+function centerAnchoredXY(centerX, centerY, width, height, radians) {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const halfW = width / 2;
+  const halfH = height / 2;
+  return {
+    x: centerX - halfW * cos + halfH * sin,
+    y: centerY - halfW * sin - halfH * cos,
+  };
+}
+
+/** Axis-aligned bounding box of a rotated w×h rectangle centered at (cx,cy). */
+function rotatedBounds(centerX, centerY, width, height, radians) {
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  const halfW = (width * cos + height * sin) / 2;
+  const halfH = (width * sin + height * cos) / 2;
+  return { x1: centerX - halfW, y1: centerY - halfH, x2: centerX + halfW, y2: centerY + halfH };
+}
+
+function addHyperlinkAnnotation(pdfDoc, page, rect, url) {
+  if (!url) return;
+  let annots = page.node.lookupMaybe(PDFName.of('Annots'), PDFArray);
+  if (!annots) {
+    annots = pdfDoc.context.obj([]);
+    page.node.set(PDFName.of('Annots'), annots);
+  }
+  const linkRef = pdfDoc.context.register(pdfDoc.context.obj({
+    Type: PDFName.of('Annot'),
+    Subtype: PDFName.of('Link'),
+    Rect: [rect.x1, rect.y1, rect.x2, rect.y2],
+    Border: [0, 0, 0],
+    A: pdfDoc.context.obj({ Type: PDFName.of('Action'), S: PDFName.of('URI'), URI: PDFString.of(url) }),
+  }));
+  annots.push(linkRef);
+}
+
+/**
+ * Every "unit" placed on a page — a run of vector text, a raster text
+ * image, or a logo image — implements draw(page, cx, cy, radians) and
+ * reports its own unrotated width/height so tiling and hyperlink boxes can
+ * use them.
+ */
+
+function pickStandardFont(pdfDoc, { bold, italic }) {
+  if (bold && italic) return pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
+  if (bold) return pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  if (italic) return pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  return pdfDoc.embedFont(StandardFonts.Helvetica);
+}
+
+async function buildTextUnit(pdfDoc, layer) {
+  const text = layer.text.trim();
+  if (needsRasterFallback(text)) {
+    const raster = rasterizeText(layer);
+    const image = await pdfDoc.embedPng(raster.bytes);
+    return {
+      widthPt: raster.widthPt,
+      heightPt: raster.heightPt,
+      draw(page, centerX, centerY, radians) {
+        // The raster already contains the un-rotated glyphs; rotation is
+        // still applied here (uniformly with every other unit type) so the
+        // whole image turns around the requested center.
+        const { x, y } = centerAnchoredXY(centerX, centerY, raster.widthPt, raster.heightPt, radians);
+        page.drawImage(image, {
+          x, y, width: raster.widthPt, height: raster.heightPt, opacity: layer.opacity, rotate: degrees((radians * 180) / Math.PI),
+        });
+        return { x, y };
+      },
+    };
+  }
+
+  const font = await pickStandardFont(pdfDoc, layer);
+  const widthPt = font.widthOfTextAtSize(text, layer.fontSizePt);
+  const heightPt = font.heightAtSize(layer.fontSizePt);
+  const { r, g, b } = hexToRgb01(layer.colorHex);
+  return {
+    widthPt,
+    heightPt,
+    draw(page, centerX, centerY, radians) {
+      const { x, y } = centerAnchoredXY(centerX, centerY, widthPt, heightPt, radians);
+      page.drawText(text, {
+        x, y, size: layer.fontSizePt, font, color: rgb(r, g, b), opacity: layer.opacity, rotate: degrees((radians * 180) / Math.PI),
+      });
+      if (layer.underline) {
+        const underlineOffset = heightPt * 0.08;
+        const lineWidth = Math.max(1, layer.fontSizePt * 0.045);
+        const cos = Math.cos(radians);
+        const sin = Math.sin(radians);
+        const start = { x: x - underlineOffset * sin, y: y + underlineOffset * cos };
+        const end = { x: start.x + widthPt * cos, y: start.y + widthPt * sin };
+        page.drawLine({ start, end, thickness: lineWidth, color: rgb(r, g, b), opacity: layer.opacity });
+      }
+      return { x, y };
+    },
+  };
+}
+
+async function buildImageUnit(pdfDoc, layer) {
+  const embedded = layer.imageMime === 'image/png'
+    ? await pdfDoc.embedPng(layer.imageBytes)
+    : await pdfDoc.embedJpg(layer.imageBytes);
+  const widthPt = layer.widthPt;
+  const heightPt = widthPt * (embedded.height / embedded.width);
+  return {
+    widthPt,
+    heightPt,
+    draw(page, centerX, centerY, radians) {
+      const { x, y } = centerAnchoredXY(centerX, centerY, widthPt, heightPt, radians);
+      page.drawImage(embedded, {
+        x, y, width: widthPt, height: heightPt, opacity: layer.opacity, rotate: degrees((radians * 180) / Math.PI),
+      });
+      return { x, y };
+    },
+  };
+}
+
+/**
+ * Renders un-rotated text to a transparent, supersampled PNG. Rotation is
+ * applied later, uniformly, by centerAnchoredXY — this only needs to worry
+ * about getting the glyphs (in any script, any weight/style) onto pixels.
+ */
+function rasterizeText(layer) {
+  const SUPERSAMPLE = 3;
+  const fontPx = layer.fontSizePt * SUPERSAMPLE;
+  const weight = layer.bold ? '700' : '400';
+  const style = layer.italic ? 'italic' : 'normal';
+  const fontDecl = `${style} ${weight} ${fontPx}px ${layer.fontStack}`;
+
+  const measure = document.createElement('canvas').getContext('2d');
+  measure.font = fontDecl;
+  const metrics = measure.measureText(layer.text);
+  const textW = Math.max(1, metrics.width);
+  const ascent = metrics.actualBoundingBoxAscent || fontPx * 0.82;
+  const descent = metrics.actualBoundingBoxDescent || fontPx * 0.22;
+  const underlineExtra = layer.underline ? fontPx * 0.16 : 0;
+  const pad = fontPx * 0.18;
+
+  const canvasW = Math.ceil(textW + pad * 2);
+  const canvasH = Math.ceil(ascent + descent + underlineExtra + pad * 2);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  const ctx = canvas.getContext('2d');
+  ctx.font = fontDecl;
+  ctx.fillStyle = layer.colorHex;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.direction = layer.rtl ? 'rtl' : 'ltr';
+  const baselineY = pad + ascent;
+  const startX = layer.rtl ? canvasW - pad - textW : pad;
+  ctx.fillText(layer.text, startX, baselineY);
+  if (layer.underline) {
+    ctx.strokeStyle = layer.colorHex;
+    ctx.lineWidth = Math.max(1, fontPx * 0.05);
+    const lineY = baselineY + fontPx * 0.12;
+    ctx.beginPath();
+    ctx.moveTo(startX, lineY);
+    ctx.lineTo(startX + textW, lineY);
+    ctx.stroke();
+  }
+
+  const base64 = canvas.toDataURL('image/png').split(',')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+
+  return { bytes, widthPt: canvasW / SUPERSAMPLE, heightPt: canvasH / SUPERSAMPLE };
+}
+
+/**
+ * Generates tile center points (in PDF points, relative to the layer's own
+ * anchor) covering enough of the page to fill it under any rotation.
+ */
+function getTileCenters(pageW, pageH, itemW, itemH, gapPt, pattern, anchorX, anchorY) {
+  const stepMultiplier = { grid: 1, dense: 0.6, wide: 1.35, diagonal: 1 }[pattern] || 1;
+  const stepX = Math.max(itemW + gapPt * stepMultiplier, 24);
+  const stepY = Math.max(itemH + gapPt * stepMultiplier, 24);
+  const cols = Math.ceil(pageW / stepX) + 2;
+  const rows = Math.ceil(pageH / stepY) + 2;
+  const startCol = -Math.ceil(cols / 2);
+  const startRow = -Math.ceil(rows / 2);
+
+  const centers = [];
+  for (let row = 0; row < rows; row += 1) {
+    const rowIndex = startRow + row;
+    let rowOffsetX = 0;
+    if (pattern === 'diagonal') rowOffsetX = (rowIndex * stepX) / 3;
+    for (let col = 0; col < cols; col += 1) {
+      const colIndex = startCol + col;
+      const cx = anchorX + colIndex * stepX + rowOffsetX;
+      const cy = anchorY + rowIndex * stepY;
+      if (cx > -itemW && cx < pageW + itemW && cy > -itemH && cy < pageH + itemH) {
+        centers.push({ x: cx, y: cy });
+      }
+    }
+  }
+  return centers;
+}
+
+/**
+ * Parses "1-3,5,7" into a Set of page numbers, clamped to the document.
+ */
+function parsePageRange(rawValue, totalPages) {
+  const out = new Set();
+  String(rawValue || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((part) => {
+    if (part.includes('-')) {
+      const [a, b] = part.split('-').map((v) => parseInt(v.trim(), 10));
+      if (Number.isFinite(a) && Number.isFinite(b)) {
+        for (let p = Math.max(1, Math.min(a, b)); p <= Math.min(totalPages, Math.max(a, b)); p += 1) out.add(p);
+      }
+    } else {
+      const p = parseInt(part, 10);
+      if (Number.isFinite(p) && p >= 1 && p <= totalPages) out.add(p);
+    }
+  });
+  return out;
+}
+
+function resolvePageSet(layer, totalPages) {
+  if (!layer.pageRangeMode || layer.pageRangeMode === 'all') {
+    return new Set(Array.from({ length: totalPages }, (_, i) => i + 1));
+  }
+  return parsePageRange(layer.pageRangeCustom, totalPages);
+}
+
+/**
+ * Draws one layer (text or image) onto one page, handling single placement
+ * vs. tiling and the optional hyperlink annotation.
+ */
+function drawLayerOnPage(pdfDoc, page, unit, layer) {
+  const pageW = page.getWidth();
+  const pageH = page.getHeight();
+  const anchorX = layer.xRatio * pageW;
+  const anchorY = (1 - layer.yRatio) * pageH;
+  const radians = toPdfRadians(layer.rotationDeg);
+
+  if (!layer.repeat) {
+    const placed = unit.draw(page, anchorX, anchorY, radians);
+    if (layer.hyperlink) {
+      const bounds = { x1: placed.x, y1: placed.y, x2: placed.x + unit.widthPt, y2: placed.y + unit.heightPt };
+      addHyperlinkAnnotation(pdfDoc, page, bounds, layer.hyperlink);
+    }
+    return;
+  }
+
+  const centers = getTileCenters(pageW, pageH, unit.widthPt, unit.heightPt, layer.repeatGapPt, layer.repeatPattern, anchorX, anchorY);
+  centers.forEach(({ x, y }) => {
+    const placed = unit.draw(page, x, y, radians);
+    if (layer.hyperlink) {
+      const bounds = { x1: placed.x, y1: placed.y, x2: placed.x + unit.widthPt, y2: placed.y + unit.heightPt };
+      addHyperlinkAnnotation(pdfDoc, page, bounds, layer.hyperlink);
+    }
+  });
+}
+
+/**
+ * Applies an ordered list of layers ({ kind: 'text'|'image', overContent,
+ * ...layer fields }) to every page of a freshly-loaded PDF's bytes. Layers
+ * with overContent: false are drawn underneath the original page content;
+ * everything else goes above it. Supporting "underneath" requires rebuilding
+ * each page as an embedded XObject so there is a "beneath" to draw onto —
+ * that rebuild only happens when at least one layer actually needs it.
+ */
+export async function applyLayersToDocument(sourceBytes, layers, onProgress) {
+  const activeLayers = layers.filter((layer) => layer.enabled);
+  const sourcePdf = await PDFLib.PDFDocument.load(sourceBytes, { ignoreEncryption: true });
+  const totalPages = sourcePdf.getPageCount();
+  const needsRebuild = activeLayers.some((layer) => layer.overContent === false);
+  const outPdf = needsRebuild ? await PDFLib.PDFDocument.create() : sourcePdf;
+
+  const units = [];
+  for (const layer of activeLayers) {
+    // eslint-disable-next-line no-await-in-loop
+    const unit = layer.kind === 'image' ? await buildImageUnit(outPdf, layer) : await buildTextUnit(outPdf, layer);
+    units.push({ layer, unit, pageSet: resolvePageSet(layer, totalPages) });
+  }
+
+  if (!needsRebuild) {
+    const pages = outPdf.getPages();
+    pages.forEach((page, i) => {
+      units.forEach(({ layer, unit, pageSet }) => {
+        if (pageSet.has(i + 1)) drawLayerOnPage(outPdf, page, unit, layer);
+      });
+      if (onProgress) onProgress(i + 1, pages.length);
+    });
+    return outPdf.save();
+  }
+
+  const sourcePages = sourcePdf.getPages();
+  const embeddedPages = await outPdf.embedPages(sourcePages);
+  for (let i = 0; i < sourcePages.length; i += 1) {
+    const { width, height } = sourcePages[i].getSize();
+    const page = outPdf.addPage([width, height]);
+    const below = units.filter((u) => u.layer.overContent === false && u.pageSet.has(i + 1));
+    const above = units.filter((u) => u.layer.overContent !== false && u.pageSet.has(i + 1));
+    below.forEach(({ layer, unit }) => drawLayerOnPage(outPdf, page, unit, layer));
+    page.drawPage(embeddedPages[i], { x: 0, y: 0, width, height });
+    above.forEach(({ layer, unit }) => drawLayerOnPage(outPdf, page, unit, layer));
+    if (onProgress) onProgress(i + 1, sourcePages.length);
+  }
+  return outPdf.save();
+}
+
+/* ---- js/app.js ---- */
+const LARGE_FILE_BYTES = 60 * 1024 * 1024;
+const MAX_RENDER_CSS_WIDTH = 860;
+const QUICK_POSITIONS = {
+  'top-left': [0.14, 0.14], 'top-center': [0.5, 0.14], center: [0.5, 0.5],
+  'bottom-center': [0.5, 0.86], 'bottom-right': [0.86, 0.86],
+};
+
+const $ = (id) => document.getElementById(id);
+
+const dom = {
+  html: document.documentElement, body: document.body,
+  langToggleBtn: $('langToggleBtn'), newFileBtn: $('newFileBtn'), downloadBtn: $('downloadBtn'),
+  fileNameDisplay: $('fileNameDisplay'),
+  dropzone: $('dropzone'), fileInput: $('fileInput'), chooseFileBtn: $('chooseFileBtn'),
+  editor: $('editor'),
+  canvasScroll: $('canvasScroll'), pageSheet: $('pageSheet'), pdfCanvas: $('pdfCanvas'),
+  prevPageBtn: $('prevPageBtn'), nextPageBtn: $('nextPageBtn'), pageIndicator: $('pageIndicator'),
+  textModeBtn: $('textModeBtn'), logoModeBtn: $('logoModeBtn'),
+  textOverlay: $('textOverlay'), textOverlayBody: $('textOverlayBody'), textOverlayText: $('textOverlayText'),
+  textRotateHandle: $('textRotateHandle'), textResizeHandle: $('textResizeHandle'),
+  imageOverlay: $('imageOverlay'), imageOverlayBody: $('imageOverlayBody'), imageOverlayImg: $('imageOverlayImg'),
+  imageRotateHandle: $('imageRotateHandle'), imageResizeHandle: $('imageResizeHandle'),
+  textRepeatPreview: $('textRepeatPreview'), imageRepeatPreview: $('imageRepeatPreview'),
+  stampTray: $('stampTray'), trayCloseBtn: $('trayCloseBtn'),
+  textTabBtn: $('textTabBtn'), logoTabBtn: $('logoTabBtn'), textPanel: $('textPanel'), logoPanel: $('logoPanel'),
+
+  textEnabled: $('textEnabled'), watermarkText: $('watermarkText'),
+  scriptRow: $('scriptRow'), fontFamilySelect: $('fontFamilySelect'),
+  boldBtn: $('boldBtn'), italicBtn: $('italicBtn'), underlineBtn: $('underlineBtn'),
+  colorRow: $('colorRow'), customColorInput: $('customColorInput'),
+  fontSizeRange: $('fontSizeRange'), fontSizeReadout: $('fontSizeReadout'),
+  opacityRange: $('opacityRange'), opacityReadout: $('opacityReadout'),
+  rotationRange: $('rotationRange'), rotationReadout: $('rotationReadout'),
+  textQuickPos: $('textQuickPos'), textLayerOrder: $('textLayerOrder'),
+  textPageMode: $('textPageMode'), textPageRange: $('textPageRange'),
+  textRepeat: $('textRepeat'), textRepeatControls: $('textRepeatControls'),
+  textRepeatPattern: $('textRepeatPattern'), textGapRange: $('textGapRange'), textGapReadout: $('textGapReadout'),
+  textLinkEnabled: $('textLinkEnabled'), textLinkUrl: $('textLinkUrl'),
+
+  logoInput: $('logoInput'), logoUploadRow: $('logoUploadRow'), logoLoadedRow: $('logoLoadedRow'),
+  logoThumb: $('logoThumb'), logoFileNameLabel: $('logoFileNameLabel'), logoRemoveBtn: $('logoRemoveBtn'),
+  imageWidthRange: $('imageWidthRange'), imageWidthReadout: $('imageWidthReadout'),
+  imageOpacityRange: $('imageOpacityRange'), imageOpacityReadout: $('imageOpacityReadout'),
+  imageRotationRange: $('imageRotationRange'), imageRotationReadout: $('imageRotationReadout'),
+  imageQuickPos: $('imageQuickPos'), imageLayerOrder: $('imageLayerOrder'),
+  imagePageMode: $('imagePageMode'), imagePageRange: $('imagePageRange'),
+  imageRepeat: $('imageRepeat'), imageRepeatControls: $('imageRepeatControls'),
+  imageRepeatPattern: $('imageRepeatPattern'), imageGapRange: $('imageGapRange'), imageGapReadout: $('imageGapReadout'),
+  imageLinkEnabled: $('imageLinkEnabled'), imageLinkUrl: $('imageLinkUrl'),
+
+  progressOverlay: $('progressOverlay'), progressLabel: $('progressLabel'),
+  toast: $('toast'), toastTitle: $('toastTitle'), toastMessage: $('toastMessage'),
+  toastContinueBtn: $('toastContinueBtn'), toastDismissBtn: $('toastDismissBtn'),
+  roadmapGrid: $('roadmapGrid'), faqList: $('faqList'),
+};
+
+const textLayer = {
+  kind: 'text', enabled: true, text: 'CONFIDENTIAL', scriptId: 'latin', fontFamily: 'IBM Plex Sans',
+  bold: false, italic: false, underline: false, colorHex: '#1b1d1f',
+  fontSizePt: 36, opacity: 0.35, rotationDeg: 45, xRatio: 0.5, yRatio: 0.5, overContent: true,
+  pageRangeMode: 'all', pageRangeCustom: '', repeat: false, repeatPattern: 'grid', repeatGapPt: 80, hyperlink: '',
+};
+
+const imageLayer = {
+  kind: 'image', enabled: false, imageBytes: null, imageMime: null, objectUrl: null, aspectRatio: 1,
+  widthPt: 160, opacity: 0.8, rotationDeg: 0, xRatio: 0.5, yRatio: 0.5, overContent: true,
+  pageRangeMode: 'all', pageRangeCustom: '', repeat: false, repeatPattern: 'grid', repeatGapPt: 80, hyperlink: '',
+};
+
+const pdfView = new PdfDocumentView();
+let currentPage = 1;
+let totalPages = 1;
+let lastRenderInfo = null;
+let currentFileName = '';
+let activeLayerKey = 'text';
+let resizeTimer = null;
+let pointerAction = null; // { mode: 'drag'|'rotate'|'resize', key, ... }
+
+// ---------------------------------------------------------------- helpers
+
+function formatBytes(bytes) {
+  if (bytes > 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.round(bytes / 1024)} KB`;
+}
+
+function showToast({ title, message, continueLabel, onContinue }) {
+  dom.toastTitle.textContent = title;
+  dom.toastMessage.textContent = message;
+  dom.toastDismissBtn.textContent = t('dismiss');
+  if (continueLabel && onContinue) {
+    dom.toastContinueBtn.hidden = false;
+    dom.toastContinueBtn.textContent = continueLabel;
+    dom.toastContinueBtn.onclick = () => { hideToast(); onContinue(); };
+  } else {
+    dom.toastContinueBtn.hidden = true;
+    dom.toastContinueBtn.onclick = null;
+  }
+  dom.toast.hidden = false;
+}
+function hideToast() { dom.toast.hidden = true; }
+dom.toastDismissBtn.addEventListener('click', hideToast);
+
+function showProgress(label) { dom.progressLabel.textContent = label; dom.progressOverlay.hidden = false; }
+function hideProgress() { dom.progressOverlay.hidden = true; }
+
+function layerOf(key) { return key === 'image' ? imageLayer : textLayer; }
+
+// ---------------------------------------------------------------- i18n
+
+function buildStaticContent() {
+  dom.roadmapGrid.innerHTML = '';
+  t('roadmapItems').forEach((item) => {
+    const li = document.createElement('li');
+    li.textContent = item;
+    dom.roadmapGrid.appendChild(li);
+  });
+
+  dom.faqList.innerHTML = '';
+  t('faq').forEach((item) => {
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = item.q;
+    const p = document.createElement('p');
+    p.textContent = item.a;
+    details.append(summary, p);
+    dom.faqList.appendChild(details);
+  });
+
+  dom.scriptRow.innerHTML = '';
+  SCRIPTS.forEach((script) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `script-chip${script.id === textLayer.scriptId ? ' is-active' : ''}`;
+    chip.textContent = script.label;
+    chip.dataset.script = script.id;
+    chip.addEventListener('click', () => {
+      textLayer.scriptId = script.id;
+      textLayer.fontFamily = script.fonts[0].value;
+      refreshScriptChips();
+      populateFontFamilyOptions();
+      layoutOverlay('text');
+    });
+    dom.scriptRow.appendChild(chip);
+  });
+
+  document.title = getLocale() === 'ar'
+    ? 'إنكويل — ضع علامة مائية على PDF بخصوصية في متصفحك'
+    : 'Inkwell — Watermark a PDF privately in your browser';
+}
+
+function refreshScriptChips() {
+  dom.scriptRow.querySelectorAll('.script-chip').forEach((chip) => {
+    chip.classList.toggle('is-active', chip.dataset.script === textLayer.scriptId);
+  });
+}
+
+function populateFontFamilyOptions() {
+  const script = getScript(textLayer.scriptId);
+  dom.fontFamilySelect.innerHTML = '';
+  script.fonts.forEach((f) => {
+    const opt = document.createElement('option');
+    opt.value = f.value;
+    opt.textContent = f.value;
+    dom.fontFamilySelect.appendChild(opt);
+  });
+  dom.fontFamilySelect.value = textLayer.fontFamily;
+}
+
+function applyLocale(code) {
+  setLocale(code);
+  const locale = LOCALES[code];
+  dom.html.setAttribute('lang', locale.code);
+  dom.html.setAttribute('dir', locale.dir);
+  dom.body.classList.toggle('lang-ar', code === 'ar');
+  applyStaticTranslations(document);
+  buildStaticContent();
+  if (lastRenderInfo) { layoutOverlay('text'); layoutOverlay('image'); }
+}
+
+dom.langToggleBtn.addEventListener('click', () => applyLocale(getLocale() === 'en' ? 'ar' : 'en'));
+
+// ---------------------------------------------------------------- feature detection
+
+function checkBrowserSupport() {
+  const ok = typeof window.FileReader !== 'undefined'
+    && typeof window.Worker !== 'undefined'
+    && typeof URL.createObjectURL === 'function'
+    && typeof window.PDFLib !== 'undefined';
+  if (!ok) {
+    showToast({ title: t('errTitle'), message: t('errBrowser') });
+    dom.chooseFileBtn.disabled = true;
+    dom.dropzone.style.opacity = '0.6';
+  }
+  return ok;
+}
+
+// ---------------------------------------------------------------- file loading
+
+function resetToDropzone() {
+  dom.dropzone.hidden = false;
+  dom.editor.hidden = true;
+  dom.newFileBtn.hidden = true;
+  dom.downloadBtn.disabled = true;
+  dom.fileNameDisplay.hidden = true;
+  dom.fileInput.value = '';
+  currentFileName = '';
+  lastRenderInfo = null;
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  const looksLikePdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  if (!looksLikePdf) { showToast({ title: t('errTitle'), message: t('errInvalidPdf') }); return; }
+  if (file.size > LARGE_FILE_BYTES) {
+    showToast({
+      title: t('errTitle'), message: t('errTooLarge', { size: formatBytes(file.size) }),
+      continueLabel: t('continueAnyway'), onContinue: () => loadFile(file),
+    });
+    return;
+  }
+  await loadFile(file);
+}
+
+async function loadFile(file) {
+  showProgress(t('progressRendering'));
+  try {
+    const buffer = await file.arrayBuffer();
+    totalPages = await pdfView.load(buffer);
+    currentFileName = file.name;
+    currentPage = 1;
+    dom.dropzone.hidden = true;
+    dom.editor.hidden = false;
+    dom.newFileBtn.hidden = false;
+    dom.downloadBtn.disabled = false;
+    dom.fileNameDisplay.hidden = false;
+    dom.fileNameDisplay.textContent = file.name;
+    await renderCurrentPage();
+    updatePageNav();
+    setActiveLayer('text');
+  } catch (err) {
+    if (err instanceof WrongPasswordError) showToast({ title: t('errTitle'), message: t('errPasswordPdf') });
+    else if (err instanceof InvalidPdfError) showToast({ title: t('errTitle'), message: t('errInvalidPdf') });
+    else if (err && /memory|alloc/i.test(err.message || '')) showToast({ title: t('errTitle'), message: t('errMemory') });
+    else showToast({ title: t('errTitle'), message: t('errInvalidPdf') });
+  } finally {
+    hideProgress();
+  }
+}
+
+dom.chooseFileBtn.addEventListener('click', () => dom.fileInput.click());
+dom.fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+dom.newFileBtn.addEventListener('click', resetToDropzone);
+
+['dragenter', 'dragover'].forEach((evt) => dom.dropzone.addEventListener(evt, (e) => { e.preventDefault(); dom.dropzone.classList.add('is-dragover'); }));
+['dragleave', 'drop'].forEach((evt) => dom.dropzone.addEventListener(evt, (e) => { e.preventDefault(); dom.dropzone.classList.remove('is-dragover'); }));
+dom.dropzone.addEventListener('drop', (e) => { const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) handleFile(f); });
+dom.dropzone.addEventListener('click', (e) => { if (e.target === dom.chooseFileBtn) return; dom.fileInput.click(); });
+
+// ---------------------------------------------------------------- page rendering
+
+function computeTargetWidth() {
+  const containerWidth = dom.canvasScroll.clientWidth - 8;
+  return Math.max(240, Math.min(MAX_RENDER_CSS_WIDTH, containerWidth));
+}
+
+async function renderCurrentPage() {
+  const targetWidth = computeTargetWidth();
+  lastRenderInfo = await pdfView.renderPage(currentPage, dom.pdfCanvas, targetWidth);
+  dom.pageSheet.style.width = `${lastRenderInfo.cssWidth}px`;
+  dom.pageSheet.style.height = `${lastRenderInfo.cssHeight}px`;
+  layoutOverlay('text');
+  layoutOverlay('image');
+  updatePageExclusion();
+}
+
+function updatePageNav() {
+  dom.pageIndicator.textContent = t('pageOf', { current: currentPage, total: totalPages });
+  dom.prevPageBtn.disabled = currentPage <= 1;
+  dom.nextPageBtn.disabled = currentPage >= totalPages;
+}
+
+dom.prevPageBtn.addEventListener('click', async () => { if (currentPage > 1) { currentPage -= 1; await renderCurrentPage(); updatePageNav(); } });
+dom.nextPageBtn.addEventListener('click', async () => { if (currentPage < totalPages) { currentPage += 1; await renderCurrentPage(); updatePageNav(); } });
+
+window.addEventListener('resize', () => {
+  if (!lastRenderInfo) return;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => renderCurrentPage(), 150);
+});
+
+function updatePageExclusion() {
+  [['text', dom.textOverlay, dom.textRepeatPreview], ['image', dom.imageOverlay, dom.imageRepeatPreview]].forEach(([key, overlayEl, repeatEl]) => {
+    const layer = layerOf(key);
+    const included = layer.pageRangeMode === 'all' || resolvePageSet(layer, totalPages).has(currentPage);
+    overlayEl.classList.toggle('is-page-excluded', !included);
+    repeatEl.classList.toggle('is-page-excluded', !included);
+  });
+}
+
+// ---------------------------------------------------------------- layer selection / tabs
+
+function setActiveLayer(key) {
+  activeLayerKey = key;
+  dom.stampTray.hidden = false;
+  dom.textModeBtn.classList.toggle('is-active', key === 'text');
+  dom.textModeBtn.setAttribute('aria-pressed', String(key === 'text'));
+  dom.logoModeBtn.classList.toggle('is-active', key === 'image');
+  dom.logoModeBtn.setAttribute('aria-pressed', String(key === 'image'));
+  dom.textTabBtn.classList.toggle('is-active', key === 'text');
+  dom.textTabBtn.setAttribute('aria-selected', String(key === 'text'));
+  dom.logoTabBtn.classList.toggle('is-active', key === 'image');
+  dom.logoTabBtn.setAttribute('aria-selected', String(key === 'image'));
+  dom.textPanel.hidden = key !== 'text';
+  dom.logoPanel.hidden = key !== 'image';
+  dom.textOverlay.classList.toggle('is-selected', key === 'text');
+  dom.imageOverlay.classList.toggle('is-selected', key === 'image');
+}
+
+dom.textModeBtn.addEventListener('click', () => setActiveLayer('text'));
+dom.logoModeBtn.addEventListener('click', () => setActiveLayer('image'));
+dom.textTabBtn.addEventListener('click', () => setActiveLayer('text'));
+dom.logoTabBtn.addEventListener('click', () => setActiveLayer('image'));
+dom.trayCloseBtn.addEventListener('click', () => { dom.stampTray.hidden = true; });
+
+// ---------------------------------------------------------------- live layout
+
+function scale() { return lastRenderInfo ? lastRenderInfo.pointsToCssPixels : 1; }
+
+function layoutOverlay(key) {
+  if (!lastRenderInfo) return;
+  const layer = layerOf(key);
+  const overlayEl = key === 'text' ? dom.textOverlay : dom.imageOverlay;
+
+  overlayEl.hidden = key === 'image' && !layer.imageBytes;
+  overlayEl.style.left = `${layer.xRatio * 100}%`;
+  overlayEl.style.top = `${layer.yRatio * 100}%`;
+  overlayEl.style.transform = `translate(-50%, -50%) rotate(${layer.rotationDeg}deg)`;
+
+  if (key === 'text') {
+    const fontStack = getFontStack(layer.scriptId, layer.fontFamily);
+    dom.textOverlayText.textContent = layer.text.trim() || '\u00A0';
+    dom.textOverlayBody.style.fontSize = `${Math.max(4, layer.fontSizePt * scale())}px`;
+    dom.textOverlayBody.style.fontFamily = fontStack;
+    dom.textOverlayBody.style.color = layer.colorHex;
+    dom.textOverlayBody.style.opacity = String(layer.opacity);
+    dom.textOverlayBody.style.fontWeight = layer.bold ? '700' : '400';
+    dom.textOverlayBody.style.fontStyle = layer.italic ? 'italic' : 'normal';
+    dom.textOverlayBody.style.textDecoration = layer.underline ? 'underline' : 'none';
+    dom.textOverlayBody.dir = getScript(layer.scriptId).rtl ? 'rtl' : 'ltr';
+  } else if (layer.imageBytes) {
+    const widthPx = layer.widthPt * scale();
+    dom.imageOverlayImg.style.width = `${widthPx}px`;
+    dom.imageOverlayImg.style.height = 'auto';
+    dom.imageOverlayImg.style.opacity = String(layer.opacity);
+  }
+
+  renderRepeatPreview(key);
+}
+
+function renderRepeatPreview(key) {
+  const layer = layerOf(key);
+  const el = key === 'text' ? dom.textRepeatPreview : dom.imageRepeatPreview;
+  el.innerHTML = '';
+  if (!layer.repeat || !lastRenderInfo) { el.hidden = true; return; }
+  if (key === 'image' && !layer.imageBytes) { el.hidden = true; return; }
+  if (key === 'text' && !layer.text.trim()) { el.hidden = true; return; }
+  el.hidden = false;
+
+  const pageW = lastRenderInfo.cssWidth;
+  const pageH = lastRenderInfo.cssHeight;
+  const anchorX = layer.xRatio * pageW;
+  const anchorY = layer.yRatio * pageH;
+  const gapPx = layer.repeatGapPt * scale();
+
+  let itemW;
+  let itemH;
+  if (key === 'text') {
+    const probe = document.createElement('span');
+    probe.style.position = 'fixed';
+    probe.style.visibility = 'hidden';
+    probe.style.fontSize = `${layer.fontSizePt * scale()}px`;
+    probe.style.fontFamily = getFontStack(layer.scriptId, layer.fontFamily);
+    probe.style.fontWeight = layer.bold ? '700' : '400';
+    probe.style.fontStyle = layer.italic ? 'italic' : 'normal';
+    probe.textContent = layer.text.trim();
+    document.body.appendChild(probe);
+    itemW = probe.offsetWidth || 40;
+    itemH = probe.offsetHeight || layer.fontSizePt * scale();
+    probe.remove();
+  } else {
+    itemW = layer.widthPt * scale();
+    itemH = itemW / layer.aspectRatio;
+  }
+
+  const stepMultiplier = { grid: 1, dense: 0.6, wide: 1.35, diagonal: 1 }[layer.repeatPattern] || 1;
+  const stepX = Math.max(itemW + gapPx * stepMultiplier, 24);
+  const stepY = Math.max(itemH + gapPx * stepMultiplier, 24);
+  const cols = Math.ceil(pageW / stepX) + 2;
+  const rows = Math.ceil(pageH / stepY) + 2;
+
+  const frag = document.createDocumentFragment();
+  for (let row = -Math.ceil(rows / 2); row <= Math.ceil(rows / 2); row += 1) {
+    let rowOffsetX = 0;
+    if (layer.repeatPattern === 'diagonal') rowOffsetX = (row * stepX) / 3;
+    for (let col = -Math.ceil(cols / 2); col <= Math.ceil(cols / 2); col += 1) {
+      const cx = anchorX + col * stepX + rowOffsetX;
+      const cy = anchorY + row * stepY;
+      if (cx < -itemW || cx > pageW + itemW || cy < -itemH || cy > pageH + itemH) continue;
+      let node;
+      if (key === 'text') {
+        node = document.createElement('span');
+        node.textContent = layer.text.trim();
+        node.style.fontSize = `${layer.fontSizePt * scale()}px`;
+        node.style.fontFamily = getFontStack(layer.scriptId, layer.fontFamily);
+        node.style.fontWeight = layer.bold ? '700' : '400';
+        node.style.fontStyle = layer.italic ? 'italic' : 'normal';
+        node.style.textDecoration = layer.underline ? 'underline' : 'none';
+        node.style.color = layer.colorHex;
+      } else {
+        node = document.createElement('img');
+        node.src = layer.objectUrl;
+        node.style.width = `${itemW}px`;
+      }
+      node.style.left = `${cx}px`;
+      node.style.top = `${cy}px`;
+      node.style.opacity = String(layer.opacity);
+      node.style.transform = `translate(-50%, -50%) rotate(${layer.rotationDeg}deg)`;
+      frag.appendChild(node);
+    }
+  }
+  el.appendChild(frag);
+}
+
+// ---------------------------------------------------------------- drag / rotate / resize
+
+function pageSheetRect() { return dom.pageSheet.getBoundingClientRect(); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function clientPoint(e) {
+  if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+
+function clearQuickPosActive(key) {
+  const row = key === 'text' ? dom.textQuickPos : dom.imageQuickPos;
+  row.querySelectorAll('button').forEach((b) => b.classList.remove('is-active'));
+}
+
+function beginDrag(key, e) {
+  if (!lastRenderInfo) return;
+  const layer = layerOf(key);
+  const rect = pageSheetRect();
+  const point = clientPoint(e);
+  const centerPx = { x: layer.xRatio * rect.width, y: layer.yRatio * rect.height };
+  pointerAction = { mode: 'drag', key, offsetX: point.x - rect.left - centerPx.x, offsetY: point.y - rect.top - centerPx.y };
+  setActiveLayer(key);
+  e.preventDefault();
+}
+
+function beginRotate(key, e) {
+  if (!lastRenderInfo) return;
+  pointerAction = { mode: 'rotate', key };
+  setActiveLayer(key);
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+function beginResize(key, e) {
+  if (!lastRenderInfo) return;
+  const layer = layerOf(key);
+  const rect = pageSheetRect();
+  const point = clientPoint(e);
+  const centerPx = { x: rect.left + layer.xRatio * rect.width, y: rect.top + layer.yRatio * rect.height };
+  const startDistance = Math.hypot(point.x - centerPx.x, point.y - centerPx.y) || 1;
+  const startValue = key === 'text' ? layer.fontSizePt : layer.widthPt;
+  pointerAction = { mode: 'resize', key, startDistance, startValue };
+  setActiveLayer(key);
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+function onPointerMove(e) {
+  if (!pointerAction || !lastRenderInfo) return;
+  const { mode, key } = pointerAction;
+  const layer = layerOf(key);
+  const rect = pageSheetRect();
+  const point = clientPoint(e);
+
+  if (mode === 'drag') {
+    const localX = point.x - rect.left - pointerAction.offsetX;
+    const localY = point.y - rect.top - pointerAction.offsetY;
+    layer.xRatio = clamp(localX / rect.width, 0.02, 0.98);
+    layer.yRatio = clamp(localY / rect.height, 0.02, 0.98);
+    clearQuickPosActive(key);
+    layoutOverlay(key);
+  } else if (mode === 'resize') {
+    const centerPx = { x: rect.left + layer.xRatio * rect.width, y: rect.top + layer.yRatio * rect.height };
+    const distance = Math.hypot(point.x - centerPx.x, point.y - centerPx.y) || 1;
+    const ratio = distance / pointerAction.startDistance;
+    if (key === 'text') {
+      layer.fontSizePt = clamp(Math.round(pointerAction.startValue * ratio), 8, 160);
+      dom.fontSizeRange.value = String(layer.fontSizePt);
+      dom.fontSizeReadout.textContent = `${layer.fontSizePt}pt`;
+    } else {
+      layer.widthPt = clamp(Math.round(pointerAction.startValue * ratio), 20, 500);
+      dom.imageWidthRange.value = String(layer.widthPt);
+      dom.imageWidthReadout.textContent = `${layer.widthPt}pt`;
+    }
+    layoutOverlay(key);
+  } else if (mode === 'rotate') {
+    const centerPx = { x: rect.left + layer.xRatio * rect.width, y: rect.top + layer.yRatio * rect.height };
+    const angle = Math.round((Math.atan2(point.y - centerPx.y, point.x - centerPx.x) * 180) / Math.PI + 90);
+    layer.rotationDeg = ((angle + 180) % 360 + 360) % 360 - 180;
+    const rangeEl = key === 'text' ? dom.rotationRange : dom.imageRotationRange;
+    const readoutEl = key === 'text' ? dom.rotationReadout : dom.imageRotationReadout;
+    rangeEl.value = String(layer.rotationDeg);
+    readoutEl.textContent = `${layer.rotationDeg}°`;
+    layoutOverlay(key);
+  }
+}
+
+function endPointerAction() { pointerAction = null; }
+
+dom.textOverlayBody.addEventListener('pointerdown', (e) => beginDrag('text', e));
+dom.imageOverlayBody.addEventListener('pointerdown', (e) => beginDrag('image', e));
+dom.textRotateHandle.addEventListener('pointerdown', (e) => beginRotate('text', e));
+dom.imageRotateHandle.addEventListener('pointerdown', (e) => beginRotate('image', e));
+dom.textResizeHandle.addEventListener('pointerdown', (e) => beginResize('text', e));
+dom.imageResizeHandle.addEventListener('pointerdown', (e) => beginResize('image', e));
+document.addEventListener('pointermove', onPointerMove, { passive: true });
+document.addEventListener('pointerup', endPointerAction);
+document.addEventListener('pointercancel', endPointerAction);
+
+// ---------------------------------------------------------------- tray wiring — shared bits
+
+function wireQuickPos(rowEl, key) {
+  rowEl.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const layer = layerOf(key);
+      const [x, y] = QUICK_POSITIONS[btn.dataset.pos] || [0.5, 0.5];
+      layer.xRatio = x;
+      layer.yRatio = y;
+      rowEl.querySelectorAll('button').forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      layoutOverlay(key);
+    });
+  });
+}
+wireQuickPos(dom.textQuickPos, 'text');
+wireQuickPos(dom.imageQuickPos, 'image');
+
+function wirePageMode(modeEl, rangeEl, key) {
+  modeEl.addEventListener('change', () => {
+    layerOf(key).pageRangeMode = modeEl.value;
+    rangeEl.hidden = modeEl.value !== 'custom';
+    updatePageExclusion();
+  });
+  rangeEl.addEventListener('input', () => { layerOf(key).pageRangeCustom = rangeEl.value; updatePageExclusion(); });
+}
+wirePageMode(dom.textPageMode, dom.textPageRange, 'text');
+wirePageMode(dom.imagePageMode, dom.imagePageRange, 'image');
+
+function wireRepeat(checkEl, controlsEl, patternEl, gapEl, gapReadoutEl, key) {
+  checkEl.addEventListener('change', () => {
+    layerOf(key).repeat = checkEl.checked;
+    controlsEl.hidden = !checkEl.checked;
+    layoutOverlay(key);
+  });
+  patternEl.addEventListener('change', () => { layerOf(key).repeatPattern = patternEl.value; layoutOverlay(key); });
+  gapEl.addEventListener('input', () => {
+    layerOf(key).repeatGapPt = Number(gapEl.value);
+    gapReadoutEl.textContent = `${gapEl.value}pt`;
+    layoutOverlay(key);
+  });
+}
+wireRepeat(dom.textRepeat, dom.textRepeatControls, dom.textRepeatPattern, dom.textGapRange, dom.textGapReadout, 'text');
+wireRepeat(dom.imageRepeat, dom.imageRepeatControls, dom.imageRepeatPattern, dom.imageGapRange, dom.imageGapReadout, 'image');
+
+function wireLink(checkEl, urlEl, key) {
+  checkEl.addEventListener('change', () => { urlEl.hidden = !checkEl.checked; if (!checkEl.checked) layerOf(key).hyperlink = ''; });
+  urlEl.addEventListener('input', () => { layerOf(key).hyperlink = urlEl.value.trim(); });
+}
+wireLink(dom.textLinkEnabled, dom.textLinkUrl, 'text');
+wireLink(dom.imageLinkEnabled, dom.imageLinkUrl, 'image');
+
+function wireLayerOrder(selectEl, key) {
+  selectEl.addEventListener('change', () => { layerOf(key).overContent = selectEl.value !== 'under'; });
+}
+wireLayerOrder(dom.textLayerOrder, 'text');
+wireLayerOrder(dom.imageLayerOrder, 'image');
+
+// ---------------------------------------------------------------- text panel wiring
+
+dom.textEnabled.addEventListener('change', () => {
+  textLayer.enabled = dom.textEnabled.checked;
+  dom.textOverlay.hidden = !textLayer.enabled;
+  layoutOverlay('text');
+});
+
+dom.watermarkText.value = textLayer.text;
+dom.watermarkText.addEventListener('input', (e) => {
+  textLayer.text = e.target.value;
+  const detected = detectScriptId(textLayer.text);
+  if (detected !== textLayer.scriptId) {
+    textLayer.scriptId = detected;
+    textLayer.fontFamily = getScript(detected).fonts[0].value;
+    refreshScriptChips();
+    populateFontFamilyOptions();
+  }
+  layoutOverlay('text');
+});
+
+dom.fontFamilySelect.addEventListener('change', () => { textLayer.fontFamily = dom.fontFamilySelect.value; layoutOverlay('text'); });
+
+function toggleStyleBtn(btn, prop) {
+  btn.addEventListener('click', () => {
+    textLayer[prop] = !textLayer[prop];
+    btn.setAttribute('aria-pressed', String(textLayer[prop]));
+    layoutOverlay('text');
+  });
+}
+toggleStyleBtn(dom.boldBtn, 'bold');
+toggleStyleBtn(dom.italicBtn, 'italic');
+toggleStyleBtn(dom.underlineBtn, 'underline');
+
+dom.fontSizeRange.addEventListener('input', (e) => {
+  textLayer.fontSizePt = Number(e.target.value);
+  dom.fontSizeReadout.textContent = `${textLayer.fontSizePt}pt`;
+  layoutOverlay('text');
+});
+dom.opacityRange.addEventListener('input', (e) => {
+  textLayer.opacity = Number(e.target.value) / 100;
+  dom.opacityReadout.textContent = `${e.target.value}%`;
+  layoutOverlay('text');
+});
+dom.rotationRange.addEventListener('input', (e) => {
+  textLayer.rotationDeg = Number(e.target.value);
+  dom.rotationReadout.textContent = `${textLayer.rotationDeg}°`;
+  layoutOverlay('text');
+});
+
+function setActiveSwatch(target) {
+  dom.colorRow.querySelectorAll('.color-swatch').forEach((s) => s.classList.remove('is-active'));
+  if (target) target.classList.add('is-active');
+}
+dom.colorRow.querySelectorAll('.color-swatch[data-color]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    textLayer.colorHex = btn.dataset.color;
+    dom.customColorInput.value = btn.dataset.color;
+    setActiveSwatch(btn);
+    layoutOverlay('text');
+  });
+});
+dom.customColorInput.addEventListener('input', (e) => {
+  textLayer.colorHex = e.target.value;
+  setActiveSwatch(dom.customColorInput.closest('.color-swatch'));
+  layoutOverlay('text');
+});
+
+// ---------------------------------------------------------------- logo panel wiring
+
+dom.logoInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!['image/png', 'image/jpeg'].includes(file.type)) {
+    showToast({ title: t('errTitle'), message: t('errInvalidImage') });
+    return;
+  }
+  const buffer = await file.arrayBuffer();
+  imageLayer.imageBytes = new Uint8Array(buffer);
+  imageLayer.imageMime = file.type;
+  if (imageLayer.objectUrl) URL.revokeObjectURL(imageLayer.objectUrl);
+  imageLayer.objectUrl = URL.createObjectURL(file);
+  imageLayer.enabled = true;
+
+  await new Promise((resolve) => {
+    dom.imageOverlayImg.onload = () => {
+      imageLayer.aspectRatio = dom.imageOverlayImg.naturalWidth / dom.imageOverlayImg.naturalHeight;
+      resolve();
+    };
+    dom.imageOverlayImg.src = imageLayer.objectUrl;
+  });
+
+  dom.logoThumb.src = imageLayer.objectUrl;
+  dom.logoFileNameLabel.textContent = file.name;
+  dom.logoUploadRow.hidden = true;
+  dom.logoLoadedRow.hidden = false;
+  dom.downloadBtn.disabled = false;
+  setActiveLayer('image');
+  layoutOverlay('image');
+});
+
+dom.logoRemoveBtn.addEventListener('click', () => {
+  imageLayer.enabled = false;
+  imageLayer.imageBytes = null;
+  if (imageLayer.objectUrl) URL.revokeObjectURL(imageLayer.objectUrl);
+  imageLayer.objectUrl = null;
+  dom.logoInput.value = '';
+  dom.logoUploadRow.hidden = false;
+  dom.logoLoadedRow.hidden = true;
+  layoutOverlay('image');
+});
+
+dom.imageWidthRange.addEventListener('input', (e) => {
+  imageLayer.widthPt = Number(e.target.value);
+  dom.imageWidthReadout.textContent = `${imageLayer.widthPt}pt`;
+  layoutOverlay('image');
+});
+dom.imageOpacityRange.addEventListener('input', (e) => {
+  imageLayer.opacity = Number(e.target.value) / 100;
+  dom.imageOpacityReadout.textContent = `${e.target.value}%`;
+  layoutOverlay('image');
+});
+dom.imageRotationRange.addEventListener('input', (e) => {
+  imageLayer.rotationDeg = Number(e.target.value);
+  dom.imageRotationReadout.textContent = `${imageLayer.rotationDeg}°`;
+  layoutOverlay('image');
+});
+
+// ---------------------------------------------------------------- download
+
+function normalizeHyperlink(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(withScheme);
+    if (['http:', 'https:', 'mailto:', 'tel:'].includes(parsed.protocol)) return withScheme;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function buildLayerPayload(key) {
+  const layer = layerOf(key);
+  const base = {
+    kind: key, enabled: layer.enabled, opacity: layer.opacity, rotationDeg: layer.rotationDeg,
+    xRatio: layer.xRatio, yRatio: layer.yRatio, overContent: layer.overContent,
+    pageRangeMode: layer.pageRangeMode, pageRangeCustom: layer.pageRangeCustom,
+    repeat: layer.repeat, repeatPattern: layer.repeatPattern, repeatGapPt: layer.repeatGapPt,
+    hyperlink: '',
+  };
+  if (layer.hyperlink) {
+    const normalized = normalizeHyperlink(layer.hyperlink);
+    if (normalized === null) throw new Error('invalid-link');
+    base.hyperlink = normalized;
+  }
+  if (key === 'text') {
+    return {
+      ...base,
+      enabled: layer.enabled && layer.text.trim().length > 0,
+      text: layer.text,
+      fontSizePt: layer.fontSizePt,
+      colorHex: layer.colorHex,
+      bold: layer.bold,
+      italic: layer.italic,
+      underline: layer.underline,
+      fontStack: getFontStack(layer.scriptId, layer.fontFamily),
+      rtl: getScript(layer.scriptId).rtl,
+    };
+  }
+  return {
+    ...base,
+    enabled: layer.enabled && !!layer.imageBytes,
+    imageBytes: layer.imageBytes,
+    imageMime: layer.imageMime,
+    widthPt: layer.widthPt,
+  };
+}
+
+async function handleDownload() {
+  let layers;
+  try {
+    layers = [buildLayerPayload('text'), buildLayerPayload('image')];
+  } catch {
+    showToast({ title: t('errTitle'), message: t('errInvalidLink') });
+    return;
+  }
+  if (!layers.some((l) => l.enabled)) {
+    setActiveLayer('text');
+    dom.watermarkText.focus();
+    return;
+  }
+
+  dom.downloadBtn.disabled = true;
+  showProgress(t('progressStamping'));
+  try {
+    const rawBytes = pdfView.getRawBytes();
+    const bytes = await applyLayersToDocument(rawBytes, layers, (done, total) => {
+      dom.progressLabel.textContent = `${t('progressStamping')} ${done}/${total}`;
+    });
+    showProgress(t('progressFinalizing'));
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const base = currentFileName.replace(/\.pdf$/i, '') || 'document';
+    a.href = url;
+    a.download = `${base}-watermarked.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch {
+    showToast({ title: t('errTitle'), message: t('errGenericProcessing') });
+  } finally {
+    hideProgress();
+    dom.downloadBtn.disabled = false;
+  }
+}
+dom.downloadBtn.addEventListener('click', handleDownload);
+
+// ---------------------------------------------------------------- init
+
+populateFontFamilyOptions();
+applyLocale('en');
+checkBrowserSupport();
+
+</script>
+</body>
+</html>
